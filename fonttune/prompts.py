@@ -57,12 +57,21 @@ def ask_config(cfg, facts, skip=()):
     skip: keys already decided by flags or environment; they are not asked."""
     cfg = dict(cfg)
     ask = lambda k: k not in skip  # noqa: E731
-    if ask("otf2ttf"):
+    skipped = lambda k, why: print(f"\n[{k}] skipped: {why}")  # noqa: E731
+    if not facts.get("cff", True) and ask("otf2ttf"):
+        skipped("otf2ttf", "the fonts are already TrueType")
+    elif ask("otf2ttf"):
         cfg["otf2ttf"] = yesno("otf2ttf", "Convert CFF/OTF outlines to TrueType "
                                "(FreeType autohints TrueType under hintslight)", cfg["otf2ttf"])
-    if ask("weights"):
-        cfg["weights"] = yesno("weights", "Normalise usWeightClass (Apple New York and MiSans ship "
-                               "mislabelled weights)", cfg["weights"])
+    if not facts.get("weights", True) and ask("weights"):
+        skipped("weights", "variable fonts take their weight from the wght axis"
+                if facts.get("variable") else "every usWeightClass already matches its style name")
+        cfg["weights"] = False
+    elif ask("weights"):
+        cfg["weights"] = yesno("weights", "Normalise usWeightClass: some styles carry the wrong "
+                               "weight number, so fontconfig picks the wrong face", cfg["weights"])
+    if not facts["trak"] and ask("trak"):
+        skipped("trak", "no Apple trak table in these fonts")
     if facts["trak"] and ask("trak"):
         opts = [("", "leave the table (Firefox applies it ~5x too strongly)"),
                 ("strip", "remove it: all programs agree, text ~10% tighter"),

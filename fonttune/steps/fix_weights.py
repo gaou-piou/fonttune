@@ -75,21 +75,31 @@ def _subfamily(font):
     return None
 
 
-def fix(path):
-    font = TTFont(path)
-    if "fvar" in font:
-        return 0
+def target(font, path="", warn=True):
+    """(subfamily, old, new) for a static font, or None when it is not handled."""
+    if "fvar" in font or "OS/2" not in font:
+        return None
     sub = _subfamily(font)
     if sub is None:
-        sys.stderr.write("fix_weights: %s: no subfamily name, skipped\n" % path)
-        return 0
+        if warn:
+            sys.stderr.write("fix_weights: %s: no subfamily name, skipped\n" % path)
+        return None
     key = sub.lower().replace("italic", "").replace(" ", "").replace("-", "")
     key = key or "regular"
     table = _table(font)
     if key not in table:
-        sys.stderr.write("fix_weights: %s: unknown subfamily %r, skipped\n" % (path, sub))
+        if warn:
+            sys.stderr.write("fix_weights: %s: unknown subfamily %r, skipped\n" % (path, sub))
+        return None
+    return sub, font["OS/2"].usWeightClass, table[key]
+
+
+def fix(path):
+    font = TTFont(path)
+    t = target(font, path)
+    if t is None:
         return 0
-    old, new = font["OS/2"].usWeightClass, table[key]
+    sub, old, new = t
     if old != new:
         font["OS/2"].usWeightClass = new
         font.save(path)

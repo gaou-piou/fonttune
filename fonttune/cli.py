@@ -74,7 +74,8 @@ def save_config(cfg, path=CONFIG):
 def facts(fonts):
     """What the inputs allow, so prompts only ask relevant things."""
     from fontTools.ttLib import TTFont
-    trak, gridable, hintable, variable = False, True, True, False
+    from .steps.fix_weights import target
+    trak, gridable, hintable, variable, cff, weights = False, True, True, False, False, False
     for f in fonts:
         try:
             t = TTFont(f, lazy=True)
@@ -83,12 +84,16 @@ def facts(fonts):
         trak |= "trak" in t
         outlines = "glyf" in t or "CFF " in t
         variable |= "fvar" in t
+        cff |= "CFF " in t or "CFF2" in t
+        w = target(t, warn=False)
+        weights |= bool(w and w[1] != w[2])
         # ttfautohint handles variable fonts (hint.py drops cvar); the pixel grid does not
         if not outlines:
             hintable = False
         if "fvar" in t or not outlines:
             gridable = False
-    return {"trak": trak, "gridable": gridable, "hintable": hintable, "variable": variable}
+    return {"trak": trak, "gridable": gridable, "hintable": hintable, "variable": variable,
+            "cff": cff, "weights": weights}
 
 
 def die(msg):

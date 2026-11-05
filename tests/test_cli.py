@@ -152,3 +152,40 @@ def test_pixel_grid_asked_before_even_spacing(monkeypatch, capsys):
     cfg = prompts.ask_config({**DEFAULTS, "pixel_grid": "auto"}, {**static, "gridable": False,
                                                                   "variable": True})
     assert "even_spacing" in asked and cfg["pixel_grid"] == ""
+
+
+def test_facts_skip_irrelevant_questions(tmp_path, monkeypatch, capsys):
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fontTools.fontBuilder import FontBuilder
+    from fonttune import prompts
+    from fonttune.cli import DEFAULTS, facts
+
+    def font(path, style, weight):
+        fb = FontBuilder(1000, isTTF=True)
+        fb.setupGlyphOrder([".notdef"])
+        fb.setupCharacterMap({})
+        fb.setupGlyf({".notdef": __import__("fontTools.pens.ttGlyphPen", fromlist=["x"])
+                      .TTGlyphPen(None).glyph()})
+        fb.setupHorizontalMetrics({".notdef": (500, 0)})
+        fb.setupHorizontalHeader()
+        fb.setupNameTable({"familyName": "T", "styleName": style})
+        fb.setupOS2(usWeightClass=weight)
+        fb.setupPost()
+        fb.save(path)
+        return str(path)
+
+    ok = font(tmp_path / "ok.ttf", "Bold", 700)
+    bad = font(tmp_path / "bad.ttf", "Bold", 600)
+    assert facts([ok])["cff"] is False and facts([ok])["weights"] is False
+    assert facts([ok, bad])["weights"] is True
+    asked = []
+    monkeypatch.setattr(prompts, "choice", lambda k, *a: asked.append(k) or a[-1])
+    monkeypatch.setattr(prompts, "yesno", lambda k, *a: asked.append(k) or a[-1])
+    monkeypatch.setattr(prompts, "hintstyle", lambda: "slight")
+    prompts.ask_config(DEFAULTS, facts([ok]))
+    out = capsys.readouterr().out
+    assert "otf2ttf" not in asked and "weights" not in asked and "trak" not in asked
+    assert "[otf2ttf] skipped" in out and "[weights] skipped" in out and "[trak] skipped" in out
+    asked.clear()
+    prompts.ask_config(DEFAULTS, facts([ok, bad]))
+    assert "weights" in asked
