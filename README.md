@@ -13,6 +13,9 @@ the output records the version and the steps applied.
 Order: otf2ttf, weights, trak, even_spacing | pixel_grid, features, gasp.
 `pixel_grid` and `even_spacing` are mutually exclusive.
 
+Repository: `git@github.com:gaou-piou/fonttune.git`
+(PKGBUILDs use `https://github.com/gaou-piou/fonttune.git#tag=vX.Y.Z`).
+
 Local testing from a PKGBUILD: `FONTTUNE_REPO=file:///path/to/fonttune makepkg -f`.
 
 Tests: `python -m pytest tests`.
