@@ -84,8 +84,14 @@ def test_hint_runs_and_hintconf(tmp_path):
 def test_advice_text():
     sys.path.insert(0, str(BIN.parent.parent))
     from fonttune import advice, cli
-    cfg = dict(cli.DEFAULTS, pixel_grid="14", hint="balanced", trak="")
-    txt = advice.render(cfg, hs="slight")
-    assert "subpixel-position" in txt and "ignores the bytecode" in txt and "[browser]" in txt
-    assert "balanced" in txt
-    assert "hint style is" in advice.render(dict(cli.DEFAULTS), hs="medium")
+    st = {"firefox": {"mozilla/x.default": {"enabled": "true"}},
+          "chromium_flag_files": ["brave-flags.conf"], "gtk": {"gtk-4.0": "false"}}
+    cfg = dict(cli.DEFAULTS, pixel_grid="14", hint="balanced")
+    txt = advice.render(cfg, hs="slight", state=st)
+    assert "force-disabled = true" in txt and "ignores the bytecode" in txt
+    assert "now false, set true" in txt and "add --disable-font-subpixel-positioning" not in txt
+    cfg = dict(cli.DEFAULTS, even_spacing="all")
+    txt = advice.render(cfg, hs="slight", state=st)
+    assert "remove --disable-font-subpixel-positioning" in txt and "already right" in txt
+    assert "keep it" in txt
+    assert "hint style is" in advice.render(dict(cli.DEFAULTS), hs="medium", state=st)

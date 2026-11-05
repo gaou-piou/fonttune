@@ -9,6 +9,47 @@ LABELS = [
 ]
 
 
+import os
+import re
+from pathlib import Path
+
+CHROMIUM_FLAG = "--disable-font-subpixel-positioning"
+FF_ROOTS = (".mozilla/firefox", ".librewolf", ".floorp")
+
+
+def probe(home=None):
+    """What the user already has: Firefox prefs, Chromium flag files, GTK key."""
+    home = Path(home or Path.home())
+    ff = {}  # profile -> {pref: value}
+    for root in FF_ROOTS:
+        for d in sorted((home / root).glob("*.default*")):
+            if re.search(r"back|crash", d.name):
+                continue
+            vals = {}
+            for fn in ("prefs.js", "user.js"):
+                f = d / fn
+                if not f.is_file():
+                    continue
+                for m in re.finditer(r'user_pref\("(gfx\.text\.subpixel-position\.force-(?:enabled|disabled))",\s*(true|false)',
+                                     f.read_text(errors="ignore")):
+                    vals[m.group(1).rsplit("force-", 1)[1]] = m.group(2)
+            ff[f"{root.split('/')[0]}/{d.name}".lstrip(".")] = vals
+    flags = sorted(p.name for p in (home / ".config").glob("*flags*.conf")
+                   if CHROMIUM_FLAG in p.read_text(errors="ignore").split())
+    gtk = {}
+    for v in ("3", "4"):
+        f = home / ".config" / f"gtk-{v}.0" / "settings.ini"
+        if f.is_file():
+            m = re.search(r"^gtk-hint-font-metrics\s*=\s*(\w+)", f.read_text(), re.M)
+            gtk[f"gtk-{v}.0"] = m.group(1) if m else None
+    return {"firefox": ff, "chromium_flag_files": flags, "gtk": gtk}
+
+
+def _names(xs, n=4):
+    xs = list(xs)
+    return ", ".join(xs[:n]) + (f" and {len(xs) - n} more" if len(xs) > n else "")
+
+
 def _on(v):
     return v not in (False, "", "keep", None)
 
@@ -26,11 +67,14 @@ def summary(cfg):
     return lines
 
 
-def advice(cfg, hs=None, has_trak=True):
-    """-> list of (where, text). hs: desktop hint style, '' when unknown."""
+def advice(cfg, hs=None, has_trak=True, state=None):
+    """-> list of (where, text). hs: desktop hint style, '' when unknown.
+    state: probe() result (None = probe this machine)."""
     hs = hintstyle() if hs is None else hs
+    st = probe() if state is None else state
     out = []
     add = lambda where, text: out.append((where, text))  # noqa: E731
+    grid = _on(cfg["pixel_grid"])
     if _on(cfg["hint"]):
         if hs in ("slight", "none"):
             add("system", f"hint is on but the desktop uses '{hs}': FreeType ignores the bytecode. "
@@ -50,19 +94,48 @@ def advice(cfg, hs=None, has_trak=True):
     if cfg["otf2ttf"] and hs == "slight" and not _on(cfg["hint"]):
         add("system", "hintslight autohints TrueType only, so the conversion is what makes "
                       "the fonts snap; keep font-hinting at slight")
-    if _on(cfg["pixel_grid"]):
+
+    # ── subpixel positioning: grid wants it off, everything else wants it on ──
+    if grid:
         p = cfg["pixel_grid"]
         p = f"{auto_ppem():g}" if p == "auto" else p
         add("system", f"pixel grid is tuned for {p} ppem: set the UI font to that size "
                       "(pt = ppem x 0.75), text-scaling-factor 1.0, and no fractional monitor scale")
-        add("system", "~/.config/gtk-4.0/settings.ini and gtk-3.0: gtk-hint-font-metrics=true "
-                      "so GTK keeps the rounded advances")
-        add("browser", "Firefox: user.js gfx.text.subpixel-position.force-disabled = true "
-                       "(otherwise it positions glyphs at fractions and undoes the grid)")
-        add("browser", "Chromium/Brave/Helium: --disable-font-subpixel-positioning")
+    want_metrics = "true" if grid else "false"
+    for name, cur in st["gtk"].items():
+        have = cur or "unset"
+        if cur != want_metrics:
+            add("system", f"{name}/settings.ini gtk-hint-font-metrics: now {have}, set "
+                          f"{want_metrics} (import-gsettings.sh does it)")
+        else:
+            add("system", f"{name}/settings.ini gtk-hint-font-metrics = {cur}: already right")
+    ffs = st["firefox"]
+    for prof, v in ffs.items():
+        dis, en = v.get("disabled"), v.get("enabled")
+        if grid:
+            if dis != "true" or en == "true":
+                add("browser", f"Firefox [{prof}]: set gfx.text.subpixel-position.force-disabled = true "
+                               f"and drop force-enabled (now disabled={dis or 'unset'}, enabled={en or 'unset'})")
+            else:
+                add("browser", f"Firefox [{prof}]: force-disabled = true already set")
+        elif dis == "true":
+            add("browser", f"Firefox [{prof}]: gfx.text.subpixel-position.force-disabled = true "
+                           "works against the spacing: remove it")
+        elif en == "true":
+            add("browser", f"Firefox [{prof}]: force-enabled = true already set: keep it")
+        else:
+            add("browser", f"Firefox [{prof}]: both prefs unset (default: Firefox decides from the "
+                           "hint style); set gfx.text.subpixel-position.force-enabled = true to be sure")
+    flagged = st["chromium_flag_files"]
+    if grid and not flagged:
+        add("browser", f"Chromium/Brave/Helium/Electron: add {CHROMIUM_FLAG} to their *-flags.conf")
+    elif grid:
+        add("browser", f"Chromium-family: {CHROMIUM_FLAG} is already in {len(flagged)} flag files")
+    elif flagged:
+        add("browser", f"Chromium-family: remove {CHROMIUM_FLAG} (default: off) from "
+                       f"{len(flagged)} flag files: {_names(flagged)}")
     if _on(cfg["even_spacing"]):
-        add("browser", "even spacing needs subpixel positioning: leave Firefox/Chromium "
-                       "at their defaults (do not apply the pixel-grid tweaks)")
+        add("browser", "even spacing only shows with subpixel positioning on, hence the above")
     t = str(cfg["trak"])
     if t == "stat":
         add("browser", "trak kept with STAT: HarfBuzz apps apply it at the requested size; "
@@ -83,12 +156,12 @@ def advice(cfg, hs=None, has_trak=True):
     return out
 
 
-def render(cfg, hs=None, has_trak=True):
+def render(cfg, hs=None, has_trak=True, state=None):
     hs = hintstyle() if hs is None else hs
     lines = ["", "══ fonttune: your choices ══", *summary(cfg),
              f"  {'desktop hint style':22} {hs or 'unknown'}", "", "══ what to set around the fonts ══"]
     last = None
-    items = sorted(advice(cfg, hs, has_trak), key=lambda i: i[0] != "system")
+    items = sorted(advice(cfg, hs, has_trak, state), key=lambda i: i[0] != "system")
     for where, text in items:
         if where != last:
             lines.append(f" [{where}]")
