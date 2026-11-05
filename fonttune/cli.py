@@ -344,10 +344,18 @@ def env_layer():
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv and argv[0] in ("statics", "fit-weight"):
+        # standalone tools: their own argument parsers (--help works there)
+        mod = argv[0].replace("-", "_")
+        return subprocess.run([sys.executable, "-I", str(STEPS_DIR / f"{mod}.py"), *argv[1:]]).returncode
     ap = argparse.ArgumentParser(prog="fonttune")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("steps", help="list the pipeline steps in order")
+    for name, hlp in (("statics", "cut static instances out of variable fonts (RIBBI names)"),
+                      ("fit-weight", "find the Regular wght whose bars land on whole pixels")):
+        sub.add_parser(name, help=hlp, add_help=False)
     h = sub.add_parser("hintconf", help="write the fontconfig snippet that enables bytecode hinting")
     h.add_argument("fonts", nargs="+")
     h.add_argument("-o", "--out", default="-", help="file to write (default: stdout)")

@@ -26,3 +26,15 @@ Repository: `git@github.com:gaou-piou/fonttune.git`
 Local testing from a PKGBUILD: `FONTTUNE_REPO=file:///path/to/fonttune makepkg -f`.
 
 Tests: `python -m pytest tests`.
+
+## Variable fonts: `statics` and `fit-weight`
+
+`fonttune statics -o OUT --family NAME [--suffix S] [--weights "300 400 700"]
+[--axis TAG=VALUE ...] [--regular-wght N|auto] [--no-scale] VF.ttf...`
+cuts static instances (fontTools instancer) and writes RIBBI names, OS/2 and
+italic metadata. Pin other axes with `--axis` (`opsz=14`, `slnt=-10`,
+`FLAR=100`); `--suffix` adds a width/voice to the family. With
+`--regular-wght auto` the Regular is cut at the weight whose horizontal bars
+land on whole pixels at 16 ppem (`fonttune fit-weight FONT.ttf` shows the
+table), and the lighter weights are re-spaced to match. Run `fonttune run` on
+the output afterwards.

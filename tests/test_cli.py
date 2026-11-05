@@ -95,3 +95,8 @@ def test_advice_text():
     assert "remove --disable-font-subpixel-positioning" in txt and "already right" in txt
     assert "keep it" in txt
     assert "hint style is" in advice.render(dict(cli.DEFAULTS), hs="medium", state=st)
+
+
+def test_statics_help_and_fit_weight_dispatch():
+    assert "--regular-wght" in run("statics", "--help").stdout
+    assert "--ppem" in run("fit-weight", "--help").stdout
