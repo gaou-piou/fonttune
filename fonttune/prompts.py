@@ -61,8 +61,8 @@ def ask_config(cfg, facts, skip=()):
         cfg["otf2ttf"] = yesno("otf2ttf", "Convert CFF/OTF outlines to TrueType "
                                "(FreeType autohints TrueType under hintslight)", cfg["otf2ttf"])
     if ask("weights"):
-        cfg["weights"] = yesno("weights", "Normalise usWeightClass (Apple ships New York "
-                               "Bold/Black mislabelled)", cfg["weights"])
+        cfg["weights"] = yesno("weights", "Normalise usWeightClass (Apple New York and MiSans ship "
+                               "mislabelled weights)", cfg["weights"])
     if facts["trak"] and ask("trak"):
         opts = [("", "leave the table (Firefox applies it ~5x too strongly)"),
                 ("strip", "remove it: all programs agree, text ~10% tighter"),
