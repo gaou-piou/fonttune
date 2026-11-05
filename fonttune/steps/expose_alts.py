@@ -183,7 +183,6 @@ def plan(fonts):
         chars = {}
         for cp, gn in sorted(cmap.items()):
             chars.setdefault(gn, chr(cp))
-        # a character is a group of its own when its plain glyph has an alternate
         # a character is a group of its own when its plain glyph has an
         # alternate and it does not fold into another such character
         cand = {chars[s] for s in found if s in chars}
