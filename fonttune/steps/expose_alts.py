@@ -96,13 +96,13 @@ def scan(font):
                             todo.append(rec.LookupListIndex)
     for i in used - aalt:
         for st in subtables(g.LookupList.Lookup[i]):
-            reached.update((getattr(st, "mapping", None) or {}).values())
+            # single: glyph; multiple (type 2): list of glyphs
+            for v in (getattr(st, "mapping", None) or {}).values():
+                reached.update([v] if isinstance(v, str) else v)
             for v in (getattr(st, "alternates", None) or {}).values():
                 reached.update(v)
             for ligs in (getattr(st, "ligatures", None) or {}).values():
                 reached.update(l.LigGlyph for l in ligs)
-            for seq in (getattr(st, "mapping", None) or {}).values() if st.LookupType == 2 else ():
-                reached.update(seq)
     found = {}
     for i in aalt - used:
         for st in subtables(g.LookupList.Lookup[i]):

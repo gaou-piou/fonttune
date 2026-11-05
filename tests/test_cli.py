@@ -223,6 +223,7 @@ def test_expose_alts(tmp_path, monkeypatch, capsys):
         feature case { sub zero by zero.cap; sub zero.alt by zero.alt.cap; } case;
         feature tnum { sub zero by zero.tf; } tnum;
         feature ss01 { sub b by b.ss01; } ss01;
+        feature ccmp { sub b.ss01 by f t; } ccmp;
     """)
     font.save(str(path))
 
