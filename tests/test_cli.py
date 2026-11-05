@@ -117,3 +117,14 @@ def test_variable_fonts_ask_hint_not_grid(monkeypatch, capsys):
     asked.clear()
     prompts.ask_config(DEFAULTS, {**vf, "gridable": True, "variable": False})
     assert "hint" in asked and "pixel_grid" in asked
+
+
+def test_dev_toggle(tmp_path):
+    import os
+    env = {**os.environ, "XDG_CONFIG_HOME": str(tmp_path)}
+    r = lambda *a: subprocess.run([sys.executable, str(BIN), "dev", *a], capture_output=True,  # noqa: E731
+                                  text=True, env=env)
+    assert r().stdout.startswith("git:")
+    assert r("on").stdout.startswith("local:")
+    assert (tmp_path / "fonttune" / "dev").read_text().strip() == str(BIN.parent.parent)
+    assert r("off").stdout.startswith("git:") and not (tmp_path / "fonttune" / "dev").exists()

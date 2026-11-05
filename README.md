@@ -23,7 +23,13 @@ without asking. `trak` is empty, `strip`, `stat` or a point size to bake.
 Repository: `git@github.com:gaou-piou/fonttune.git`
 (PKGBUILDs use `https://github.com/gaou-piou/fonttune.git#tag=vX.Y.Z`).
 
-Local testing from a PKGBUILD: `FONTTUNE_REPO=file:///path/to/fonttune makepkg -f`.
+Local testing from a PKGBUILD: run `bin/fonttune dev on` once in this tree. Every
+`*-hinted` PKGBUILD then copies this working tree, uncommitted edits included, into
+`$srcdir/fonttune-local` and builds with it; the build log says `==> fonttune: LOCAL tree`
+and the package's `FONTTUNE_REV` reads `local:<commit>[-dirty]`. `fonttune dev off`
+goes back to the git source, `fonttune dev` shows which one is active.
+For one build only: `FONTTUNE_DEV=/path/to/fonttune makepkg -f` (or `FONTTUNE_DEV=off`
+to ignore the saved tree). `FONTTUNE_REPO`/`FONTTUNE_REF` still pick the git source.
 
 Tests: `python -m pytest tests`.
 

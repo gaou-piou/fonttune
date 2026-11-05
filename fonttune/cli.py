@@ -52,6 +52,7 @@ PROMPTED = ("otf2ttf", "weights", "trak", "even_spacing", "pixel_grid", "hint", 
             "feature_suffix", "gasp")
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fonttune" / "config.toml"
+DEV = CONFIG.with_name("dev")  # path of a local tree the PKGBUILDs use instead of the git source
 FONTS_CONF = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fontconfig" / "fonts.conf"
 
 
@@ -348,6 +349,21 @@ def env_layer():
     return given
 
 
+def dev(action):
+    tree = Path(__file__).resolve().parent.parent
+    if action == "on":
+        DEV.parent.mkdir(parents=True, exist_ok=True)
+        DEV.write_text(f"{tree}\n")
+    elif action == "off":
+        DEV.unlink(missing_ok=True)
+    cur = DEV.read_text().strip() if DEV.is_file() else ""
+    if cur:
+        print(f"local: PKGBUILDs build with {cur}  ({DEV}; FONTTUNE_DEV=off skips it once)")
+    else:
+        print("git: PKGBUILDs build with the fonttune git source (`fonttune dev on` to switch)")
+    return 0
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv and argv[0] in ("statics", "fit-weight"):
@@ -361,6 +377,9 @@ def main(argv=None):
     for name, hlp in (("statics", "cut static instances out of variable fonts (RIBBI names)"),
                       ("fit-weight", "find the Regular wght whose bars land on whole pixels")):
         sub.add_parser(name, help=hlp, add_help=False)
+    d = sub.add_parser("dev", help="make the PKGBUILDs build with this working tree (uncommitted "
+                       "edits included) instead of the git source")
+    d.add_argument("action", nargs="?", choices=("on", "off", "status"), default="status")
     h = sub.add_parser("hintconf", help="write the fontconfig snippet that enables bytecode hinting")
     h.add_argument("fonts", nargs="+")
     h.add_argument("-o", "--out", default="-", help="file to write (default: stdout)")
@@ -412,6 +431,8 @@ def main(argv=None):
         for k, d in STEPS:
             print(f"{k:13} {d}")
         return 0
+    if a.cmd == "dev":
+        return dev(a.action)
     if a.cmd == "hintconf":
         from . import hintconf
         hintconf.main(a.fonts, a.out, a.name)
