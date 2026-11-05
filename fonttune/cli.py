@@ -18,6 +18,7 @@ import tomllib
 from pathlib import Path
 
 from . import __version__
+from .system import auto_ppem
 
 STEPS_DIR = Path(__file__).resolve().parent / "steps"
 PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
@@ -38,6 +39,38 @@ DEFAULTS = {
     "pixel_grid": "", "features": "", "feature_target": "calt",
     "feature_family": "", "gasp": "keep", "ppem": 16.0,
 }
+
+
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fonttune" / "config.toml"
+
+
+def save_config(cfg, path=CONFIG):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = []
+    for k in DEFAULTS:
+        v = cfg[k]
+        if isinstance(v, bool):
+            lines.append(f"{k} = {str(v).lower()}")
+        elif isinstance(v, (int, float)):
+            lines.append(f"{k} = {v}")
+        else:
+            lines.append(f'{k} = "{v}"')
+    path.write_text("\n".join(lines) + "\n")
+
+
+def facts(fonts):
+    """What the inputs allow, so prompts only ask relevant things."""
+    from fontTools.ttLib import TTFont
+    trak, gridable = False, True
+    for f in fonts:
+        try:
+            t = TTFont(f, lazy=True)
+        except Exception:  # noqa: BLE001
+            continue
+        trak |= "trak" in t
+        if "fvar" in t or "glyf" not in t and "CFF " not in t:
+            gridable = False
+    return {"trak": trak, "gridable": gridable}
 
 
 def die(msg):
@@ -135,6 +168,10 @@ def main(argv=None):
     r.add_argument("--feature-target", dest="feature_target")
     r.add_argument("--feature-family", dest="feature_family")
     r.add_argument("--gasp")
+    r.add_argument("--ask", action="store_true", help="prompt for the settings (default on a terminal with no flags)")
+    r.add_argument("--no-ask", action="store_true")
+    r.add_argument("--no-config", action="store_true", help="ignore ~/.config/fonttune/config.toml")
+    r.add_argument("--save", action="store_true", help="write the final settings to config.toml")
     r.add_argument("--dry-run", action="store_true", help="print the plan only")
     a = ap.parse_args(argv)
 
@@ -144,17 +181,31 @@ def main(argv=None):
         return 0
 
     cfg = dict(DEFAULTS)
+    if not a.no_config and CONFIG.is_file() and not a.profile:
+        with open(CONFIG, "rb") as fh:
+            cfg.update(tomllib.load(fh))
     if a.profile:
         cfg.update(load_profile(a.profile))
+    given = False
     for k in DEFAULTS:
         v = getattr(a, k, None)
         if v is not None:
             cfg[k] = v
-    cfg["pixel_grid"] = str(cfg["pixel_grid"]) if cfg["pixel_grid"] else ""
-    validate(cfg)
+            given = True
     for f in a.fonts:
         if not os.path.isfile(f):
             die(f"no such font: {f}")
+    if a.ask or (not a.no_ask and not a.profile and not given and sys.stdin.isatty()):
+        from .prompts import ask_config
+        cfg = ask_config(cfg, facts(a.fonts))
+    if a.save:
+        save_config(cfg)
+        print(f"fonttune: settings saved to {CONFIG}")
+    if cfg["pixel_grid"] == "auto":
+        cfg["pixel_grid"] = auto_ppem()
+        print(f"fonttune: pixel_grid auto -> {cfg['pixel_grid']:g} ppem")
+    cfg["pixel_grid"] = str(cfg["pixel_grid"]) if cfg["pixel_grid"] else ""
+    validate(cfg)
     try:
         run(cfg, a.fonts, a.out, a.dry_run)
     except subprocess.CalledProcessError as e:
