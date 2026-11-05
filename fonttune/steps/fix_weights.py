@@ -43,6 +43,29 @@ WEIGHTS = {
 }
 
 
+# Families whose vendor scale differs from Apple's (matched on the start of
+# the family name, nameID 16 then 1). MiSans Latin ships
+#   Thin 150 ExtraLight 200 Light 250 Normal 305 Regular 330 Medium 380
+#   Demibold 450 Semibold 520 Bold 630 Heavy 700
+# which makes fontconfig pick Medium for "regular" and Heavy for "bold".
+FAMILY_WEIGHTS = {
+    "MiSans": {
+        "thin": 100, "extralight": 200, "light": 300, "normal": 350,
+        "regular": 400, "medium": 500, "demibold": 550, "semibold": 600,
+        "bold": 700, "heavy": 900,
+    },
+}
+
+
+def _table(font):
+    name = font["name"]
+    fam = name.getDebugName(16) or name.getDebugName(1) or ""
+    for prefix, table in FAMILY_WEIGHTS.items():
+        if fam.startswith(prefix):
+            return table
+    return WEIGHTS
+
+
 def _subfamily(font):
     name = font["name"]
     for name_id in (17, 2):
@@ -62,10 +85,11 @@ def fix(path):
         return 0
     key = sub.lower().replace("italic", "").replace(" ", "").replace("-", "")
     key = key or "regular"
-    if key not in WEIGHTS:
+    table = _table(font)
+    if key not in table:
         sys.stderr.write("fix_weights: %s: unknown subfamily %r, skipped\n" % (path, sub))
         return 0
-    old, new = font["OS/2"].usWeightClass, WEIGHTS[key]
+    old, new = font["OS/2"].usWeightClass, table[key]
     if old != new:
         font["OS/2"].usWeightClass = new
         font.save(path)

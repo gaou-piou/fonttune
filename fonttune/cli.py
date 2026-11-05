@@ -28,7 +28,7 @@ PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
 
 # (key, description) in execution order
 STEPS = [
-    ("weights", "normalise OS/2 usWeightClass of Apple static fonts"),
+    ("weights", "normalise OS/2 usWeightClass of static fonts (Apple, MiSans)"),
     ("trak", "remove / bake the Apple trak table, or add STAT so HarfBuzz applies it"),
     ("otf2ttf", "convert CFF outlines to TrueType (cu2qu); FreeType then autohints them"),
     ("even_spacing", "class-kerning GPOS lookup that evens out letter pairs"),
