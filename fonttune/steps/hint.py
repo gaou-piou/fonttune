@@ -61,6 +61,13 @@ def main():
            f"--x-height-snapping-exceptions={xsnap}", f"--stem-width-mode={mode}",
            "--fallback-script=none", "--fallback-scaling", "--ignore-restrictions",
            "--no-info"]
+    # cvar deltas point into the cvt that ttfautohint rewrites: drop them
+    from fontTools.ttLib import TTFont
+    f = TTFont(a.font)
+    if "cvar" in f:
+        del f["cvar"]
+        f.save(a.font)
+    f.close()
     fd, tmp = tempfile.mkstemp(suffix=".ttf", dir=os.path.dirname(os.path.abspath(a.font)))
     os.close(fd)
     try:
