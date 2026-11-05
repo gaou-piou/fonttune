@@ -428,7 +428,8 @@ def main(argv=None):
     for f in a.fonts:
         if not os.path.isfile(f):
             die(f"no such font: {f}")
-    if a.ask or (not a.no_ask and not fixed and sys.stdin.isatty()):
+    asked = bool(a.ask or (not a.no_ask and not fixed and sys.stdin.isatty()))
+    if asked:
         from .prompts import ask_config
         cfg = ask_config(cfg, facts(a.fonts), set(given) if not a.ask else set())
     if a.save:
@@ -441,6 +442,11 @@ def main(argv=None):
         cfg["pixel_grid"] = str(cfg["pixel_grid"]) if cfg["pixel_grid"] else ""
     cfg["trak"] = str(cfg["trak"]) if cfg["trak"] else ""
     validate(cfg)
+    if asked:
+        from . import advice
+        from .prompts import confirm
+        if not confirm(advice.render(cfg, has_trak=facts(a.fonts)["trak"])):
+            die("aborted")
     if a.cmd == "configure":
         save_config(cfg, a.save_to)
         print(f"fonttune: settings written to {a.save_to}")

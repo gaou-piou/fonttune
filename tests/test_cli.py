@@ -79,3 +79,13 @@ def test_hint_runs_and_hintconf(tmp_path):
     c = tmp_path / "80.conf"
     r = run("hintconf", "-o", str(c), str(out / src.name))
     assert r.returncode == 0 and 'name="hintstyle"' in c.read_text()
+
+
+def test_advice_text():
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import advice, cli
+    cfg = dict(cli.DEFAULTS, pixel_grid="14", hint="balanced", trak="")
+    txt = advice.render(cfg, hs="slight")
+    assert "subpixel-position" in txt and "ignores the bytecode" in txt and "[browser]" in txt
+    assert "balanced" in txt
+    assert "hint style is" in advice.render(dict(cli.DEFAULTS), hs="medium")

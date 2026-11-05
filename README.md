@@ -14,7 +14,7 @@ Order: weights, trak, otf2ttf, even_spacing | pixel_grid, hint, features, gasp.
 
 `hint` runs ttfautohint (presets balanced, sharp, natural, light; `--hint-mode/-min/-max/-limit/-xheight/-xsnap` override) and adds otf2ttf when it gets OTFs. FreeType runs the bytecode only at hintmedium/hintfull, so under hintslight it changes nothing; `configure` reads the desktop hint style and preselects `no` there. `fonttune hintconf -o 80-x.conf FONT...` writes the fontconfig snippet that enables bytecode hinting for those families (Chromium/Electron excluded).
 
-`fonttune configure --save-to FILE FONT...` asks the questions and writes the settings;
+`fonttune configure --save-to FILE FONT...` asks the questions, prints a summary of the choices with what to set up in the system and browsers, waits for Enter (n aborts), and writes the settings;
 `fonttune run --config FILE --in-place [--only|--skip steps] FONT...` applies them.
 `FONTTUNE_<KEY>` environment variables (e.g. `FONTTUNE_OTF2TTF=true`) answer a question
 without asking. `trak` is empty, `strip`, `stat` or a point size to bake.

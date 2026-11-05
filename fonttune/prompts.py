@@ -120,3 +120,10 @@ def ask_config(cfg, facts, skip=()):
             ("keep", "leave as is"), ("smooth", "anti-alias at all sizes"),
             ("sized", "size-based"), ("gridfit", "grid-fit at all sizes")], cfg["gasp"])
     return cfg
+
+
+def confirm(text):
+    """Show the summary and wait for continue (default) or abort."""
+    print(text)
+    print("Press Enter to continue with the tuning, or type n to abort.")
+    return _read("> ").lower() not in ("n", "no", "q", "abort")
