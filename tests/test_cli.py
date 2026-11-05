@@ -88,7 +88,7 @@ def test_advice_text():
           "chromium_flag_files": ["brave-flags.conf"], "gtk": {"gtk-4.0": "false"}}
     cfg = dict(cli.DEFAULTS, pixel_grid="14", hint="balanced")
     txt = advice.render(cfg, hs="slight", state=st)
-    assert "force-disabled = true" in txt and "ignores the bytecode" in txt
+    assert "force-enabled = true already set" in txt and "ignores the bytecode" in txt
     assert "now false, set true" in txt and "add --disable-font-subpixel-positioning" not in txt
     cfg = dict(cli.DEFAULTS, even_spacing="all")
     txt = advice.render(cfg, hs="slight", state=st)

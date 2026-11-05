@@ -95,7 +95,7 @@ def advice(cfg, hs=None, has_trak=True, state=None):
         add("system", "hintslight autohints TrueType only, so the conversion is what makes "
                       "the fonts snap; keep font-hinting at slight")
 
-    # ── subpixel positioning: grid wants it off, everything else wants it on ──
+    # ── subpixel positioning: on in Firefox always; Chromium's flag only for the grid ──
     if grid:
         p = cfg["pixel_grid"]
         p = f"{auto_ppem():g}" if p == "auto" else p
@@ -112,20 +112,16 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     ffs = st["firefox"]
     for prof, v in ffs.items():
         dis, en = v.get("disabled"), v.get("enabled")
-        if grid:
-            if dis != "true" or en == "true":
-                add("browser", f"Firefox [{prof}]: set gfx.text.subpixel-position.force-disabled = true "
-                               f"and drop force-enabled (now disabled={dis or 'unset'}, enabled={en or 'unset'})")
-            else:
-                add("browser", f"Firefox [{prof}]: force-disabled = true already set")
-        elif dis == "true":
+        # Measured: spacing looks better with force-enabled, also with
+        # gtk-hint-font-metrics=true (pixel grid), so Firefox is the same in both.
+        if dis == "true":
             add("browser", f"Firefox [{prof}]: gfx.text.subpixel-position.force-disabled = true "
-                           "works against the spacing: remove it")
+                           "works against the spacing: remove it (false) and set force-enabled = true")
         elif en == "true":
             add("browser", f"Firefox [{prof}]: force-enabled = true already set: keep it")
         else:
-            add("browser", f"Firefox [{prof}]: both prefs unset (default: Firefox decides from the "
-                           "hint style); set gfx.text.subpixel-position.force-enabled = true to be sure")
+            add("browser", f"Firefox [{prof}]: set gfx.text.subpixel-position.force-enabled = true "
+                           f"(now unset: Firefox decides from the hint style)")
     flagged = st["chromium_flag_files"]
     if grid and not flagged:
         add("browser", f"Chromium/Brave/Helium/Electron: add {CHROMIUM_FLAG} to their *-flags.conf")
