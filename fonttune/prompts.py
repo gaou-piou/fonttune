@@ -53,7 +53,7 @@ def number(key, title):
 
 
 def ask_config(cfg, facts, skip=()):
-    """facts: what the input fonts allow ({'trak': bool, 'gridable': bool}).
+    """facts: what the input fonts allow ({'trak', 'gridable', 'hintable', 'variable'}: bool).
     skip: keys already decided by flags or environment; they are not asked."""
     cfg = dict(cfg)
     ask = lambda k: k not in skip  # noqa: E731
@@ -81,6 +81,9 @@ def ask_config(cfg, facts, skip=()):
     if cfg["even_spacing"] and ask("pixel_grid"):
         print("\n[pixel_grid] skipped: even_spacing is on and the two exclude each other "
               "(re-run and answer 'no' to even_spacing to get the pixel grid)")
+    if facts.get("variable") and not cfg["even_spacing"] and ask("pixel_grid"):
+        print("\n[pixel_grid] skipped: needs static fonts and the input is variable "
+              "(cut statics first to get the pixel grid)")
     if facts["gridable"] and not cfg["even_spacing"] and ask("pixel_grid"):
         cur = str(cfg["pixel_grid"] or "off")
         g = choice("pixel_grid", "Put advances and kerning on a pixel grid", [
@@ -91,7 +94,7 @@ def ask_config(cfg, facts, skip=()):
         cfg["pixel_grid"] = {"off": ""}.get(g, g)
         if g == "custom":
             cfg["pixel_grid"] = number("pixel_grid", "ppem")
-    if facts["gridable"] and ask("hint"):
+    if facts.get("hintable", facts["gridable"]) and ask("hint"):
         hs = hintstyle()
         weak = hs in ("slight", "none")
         if weak:

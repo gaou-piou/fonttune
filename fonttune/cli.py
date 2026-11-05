@@ -73,16 +73,21 @@ def save_config(cfg, path=CONFIG):
 def facts(fonts):
     """What the inputs allow, so prompts only ask relevant things."""
     from fontTools.ttLib import TTFont
-    trak, gridable = False, True
+    trak, gridable, hintable, variable = False, True, True, False
     for f in fonts:
         try:
             t = TTFont(f, lazy=True)
         except Exception:  # noqa: BLE001
             continue
         trak |= "trak" in t
-        if "fvar" in t or "glyf" not in t and "CFF " not in t:
+        outlines = "glyf" in t or "CFF " in t
+        variable |= "fvar" in t
+        # ttfautohint handles variable fonts (hint.py drops cvar); the pixel grid does not
+        if not outlines:
+            hintable = False
+        if "fvar" in t or not outlines:
             gridable = False
-    return {"trak": trak, "gridable": gridable}
+    return {"trak": trak, "gridable": gridable, "hintable": hintable, "variable": variable}
 
 
 def die(msg):

@@ -100,3 +100,20 @@ def test_advice_text():
 def test_statics_help_and_fit_weight_dispatch():
     assert "--regular-wght" in run("statics", "--help").stdout
     assert "--ppem" in run("fit-weight", "--help").stdout
+
+
+def test_variable_fonts_ask_hint_not_grid(monkeypatch, capsys):
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import prompts
+    asked = []
+    monkeypatch.setattr(prompts, "choice", lambda k, *a: asked.append(k) or a[-1])
+    monkeypatch.setattr(prompts, "yesno", lambda k, *a: asked.append(k) or a[-1])
+    monkeypatch.setattr(prompts, "hintstyle", lambda: "full")
+    from fonttune.cli import DEFAULTS
+    vf = {"trak": False, "gridable": False, "hintable": True, "variable": True}
+    prompts.ask_config(DEFAULTS, vf)
+    assert "hint" in asked and "pixel_grid" not in asked
+    assert "[pixel_grid] skipped" in capsys.readouterr().out
+    asked.clear()
+    prompts.ask_config(DEFAULTS, {**vf, "gridable": True, "variable": False})
+    assert "hint" in asked and "pixel_grid" in asked
