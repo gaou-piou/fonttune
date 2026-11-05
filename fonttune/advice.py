@@ -4,7 +4,8 @@ from .system import auto_ppem, hintstyle
 LABELS = [
     ("otf2ttf", "CFF -> TrueType"), ("weights", "usWeightClass fix"), ("trak", "trak table"),
     ("even_spacing", "even spacing"), ("pixel_grid", "pixel grid (ppem)"),
-    ("hint", "ttfautohint preset"), ("features", "baked features"),
+    ("hint", "ttfautohint preset"), ("alts", "aalt alternates -> cvXX"),
+    ("features", "baked features"),
     ("feature_suffix", "family suffix"), ("gasp", "gasp table"),
 ]
 
@@ -143,6 +144,10 @@ def advice(cfg, hs=None, has_trak=True, state=None):
         add("system", "the features are in the fonts now: fontfeatures entries for them in "
                       "~/.config/fontconfig/fonts.conf are redundant (harmless)")
         add("browser", "Chromium ignores fontconfig fontfeatures; baked features work there")
+    if cfg.get("alts"):
+        add("system", "the aalt alternates become cvXX features, off by default: the build "
+                      "prints which cvXX is which character; turn them on in a fontfeatures "
+                      "block of fonts.conf (or bake them with features=fonts.conf)")
     if cfg["feature_suffix"]:
         add("system", f"families are renamed with '{cfg['feature_suffix']}': choose "
                       "that name in GNOME Tweaks / settings and per-app font settings")

@@ -189,3 +189,70 @@ def test_facts_skip_irrelevant_questions(tmp_path, monkeypatch, capsys):
     asked.clear()
     prompts.ask_config(DEFAULTS, facts([ok, bad]))
     assert "weights" in asked
+
+
+def test_expose_alts(tmp_path, monkeypatch, capsys):
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+    from fontTools.ttLib import TTFont
+    from fonttune import prompts
+    from fonttune.cli import DEFAULTS, facts
+
+    names = [".notdef", "a", "aacute", "a.alt", "aacute.alt", "f", "t", "t.alt", "f_t",
+             "f_t.alt", "zero", "zero.alt", "zero.cap", "zero.alt.cap", "zero.tf", "b", "b.ss01"]
+    fb = FontBuilder(1000, isTTF=True)
+    fb.setupGlyphOrder(names)
+    fb.setupCharacterMap({0x61: "a", 0xE1: "aacute", 0x66: "f", 0x74: "t", 0x30: "zero",
+                          0x62: "b"})
+    fb.setupGlyf({n: TTGlyphPen(None).glyph() for n in names})
+    fb.setupHorizontalMetrics({n: (600 if n == "zero.tf" else 500, 0) for n in names})
+    fb.setupHorizontalHeader()
+    fb.setupNameTable({"familyName": "T", "styleName": "Regular"})
+    fb.setupOS2()
+    fb.setupPost()
+    path = tmp_path / "t.ttf"
+    fb.save(str(path))
+    font = TTFont(str(path))
+    addOpenTypeFeaturesFromString(font, """
+        feature aalt { feature ss01; sub a by a.alt; sub aacute by aacute.alt; sub t by t.alt;
+            sub f_t by f_t.alt; sub zero by zero.alt; sub zero.cap by zero.alt;
+            sub zero.tf by zero.alt; } aalt;
+        feature liga { sub f t by f_t; } liga;
+        feature case { sub zero by zero.cap; sub zero.alt by zero.alt.cap; } case;
+        feature tnum { sub zero by zero.tf; } tnum;
+        feature ss01 { sub b by b.ss01; } ss01;
+    """)
+    font.save(str(path))
+
+    assert facts([str(path)])["alts"] == ["a", "t", "0"]
+    r = run("run", "--no-config", "--no-ask", "--alts", "--in-place", "--only", "alts", str(path))
+    assert r.returncode == 0, r.stderr
+    assert "cv01  a     2 glyph(s)  [aacute]" in r.stdout
+    gsub = TTFont(str(path))["GSUB"].table
+    subst = {}
+    for fr in gsub.FeatureList.FeatureRecord:
+        for i in fr.Feature.LookupListIndex:
+            for st in gsub.LookupList.Lookup[i].SubTable:
+                subst.setdefault(fr.FeatureTag, {}).update(getattr(st, "mapping", {}))
+    assert subst["cv01"] == {"a": "a.alt", "aacute": "aacute.alt"}
+    assert subst["cv02"] == {"t": "t.alt", "f_t": "f_t.alt"}
+    # zero.cap gets the cap alternate; zero.tf is wider than zero.alt, so it is left alone
+    assert subst["cv03"] == {"zero": "zero.alt", "zero.cap": "zero.alt.cap"}
+    tags = [fr.FeatureTag for fr in gsub.FeatureList.FeatureRecord]
+    assert tags == sorted(tags) and "ss01" in tags
+    # cv lookups come last, after liga/case made their forms
+    assert min(gsub.FeatureList.FeatureRecord[tags.index("cv01")].Feature.LookupListIndex) \
+        > max(i for fr in gsub.FeatureList.FeatureRecord if fr.FeatureTag in ("liga", "case")
+              for i in fr.Feature.LookupListIndex)
+
+    asked = []
+    monkeypatch.setattr(prompts, "choice", lambda k, *a: asked.append(k) or a[-1])
+    monkeypatch.setattr(prompts, "yesno", lambda k, *a: asked.append(k) or a[-1])
+    monkeypatch.setattr(prompts, "hintstyle", lambda: "slight")
+    cfg = prompts.ask_config(DEFAULTS, {"trak": False, "gridable": True, "alts": ["a"]})
+    assert "alts" in asked and cfg["alts"] is True
+    asked.clear()
+    prompts.ask_config(DEFAULTS, {"trak": False, "gridable": True, "alts": []})
+    assert "alts" not in asked and "[alts] skipped" in capsys.readouterr().out

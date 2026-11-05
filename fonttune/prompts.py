@@ -122,6 +122,15 @@ def ask_config(cfg, facts, skip=()):
             ("sharp", "sharp: stem s, 6-50 px (max contrast, low DPI)"),
             ("natural", "natural: stem n, no x-height bump (least distortion)"),
             ("light", "light: stem n, from 12 px (HiDPI)")], cur)
+    if ask("alts"):
+        alts = facts.get("alts", [])
+        if alts:
+            cfg["alts"] = yesno("alts", f"Expose {len(alts)} alternates that only 'aalt' reaches "
+                                f"({' '.join(alts[:12])}{' ...' if len(alts) > 12 else ''}) as one cvXX "
+                                "feature per character? Off until fonts.conf or CSS turns one on", True)
+        else:
+            skipped("alts", "no alternates hidden in aalt")
+            cfg["alts"] = False
     if ask("features"):
         f = choice("features", "Bake OpenType features into calt (every program applies them)", [
             ("", "none: leave the fonts as shipped"),

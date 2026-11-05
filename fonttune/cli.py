@@ -34,6 +34,7 @@ STEPS = [
     ("even_spacing", "class-kerning GPOS lookup that evens out letter pairs"),
     ("pixel_grid", "round advances and kerning to whole pixels at one ppem"),
     ("hint", "ttfautohint bytecode (FreeType runs it at hintmedium/hintfull only; see `hintconf`)"),
+    ("alts", "expose alternates only 'aalt' reaches as one cvXX per character (off by default)"),
     ("features", "bake OpenType features into the font (and rename with a suffix)"),
     ("gasp", "rewrite the gasp table (sized|smooth|gridfit)"),
 ]
@@ -43,12 +44,12 @@ DEFAULTS = {
     "otf2ttf": False, "weights": False, "trak": "", "even_spacing": "",
     "pixel_grid": "", "hint": "", "hint_mode": "auto", "hint_min": "auto",
     "hint_max": "auto", "hint_limit": "auto", "hint_xheight": "auto", "hint_xsnap": "auto",
-    "features": "", "feature_target": "calt",
+    "alts": False, "features": "", "feature_target": "calt",
     "feature_family": "", "feature_suffix": "", "gasp": "keep", "ppem": 16.0,
     "even_strength": "auto", "even_depth": "auto", "even_max": "auto", "even_min": "auto",
 }
-BOOLS = {"otf2ttf", "weights"}
-PROMPTED = ("otf2ttf", "weights", "trak", "even_spacing", "pixel_grid", "hint", "features",
+BOOLS = {"otf2ttf", "weights", "alts"}
+PROMPTED = ("otf2ttf", "weights", "trak", "even_spacing", "pixel_grid", "hint", "alts", "features",
             "feature_suffix", "gasp")
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fonttune" / "config.toml"
@@ -75,6 +76,7 @@ def facts(fonts):
     """What the inputs allow, so prompts only ask relevant things."""
     from fontTools.ttLib import TTFont
     from .steps.fix_weights import target
+    from .steps.expose_alts import plan
     trak, gridable, hintable, variable, cff, weights = False, True, True, False, False, False
     for f in fonts:
         try:
@@ -92,8 +94,12 @@ def facts(fonts):
             hintable = False
         if "fvar" in t or not outlines:
             gridable = False
+    try:
+        alts = [k for _, k in plan([TTFont(f) for f in fonts])[1]]
+    except Exception:  # noqa: BLE001
+        alts = []
     return {"trak": trak, "gridable": gridable, "hintable": hintable, "variable": variable,
-            "cff": cff, "weights": weights}
+            "cff": cff, "weights": weights, "alts": alts}
 
 
 def die(msg):
@@ -307,6 +313,8 @@ def run(cfg, ns, fonts, out, dry):
             if str(cfg["hint_xsnap"]) != "auto":
                 args += ["--xsnap", "" if cfg["hint_xsnap"] == "none" else cfg["hint_xsnap"]]
             pmap("hint", jobs, [[cfg["hint"], w, *args] for w in hinted])
+        elif step == "alts":
+            py("expose_alts", *ttfs)
         elif step == "features":
             tags = resolve_features(cfg, ttfs, ns) if cfg["features"] else ""
             if tags:
@@ -406,6 +414,8 @@ def main(argv=None):
         p.add_argument("--even-depth", dest="even_depth")
         p.add_argument("--even-max", dest="even_max")
         p.add_argument("--even-min", dest="even_min")
+        p.add_argument("--alts", action="store_true", default=None,
+                       help="expose alternates hidden in aalt as cvXX features")
         p.add_argument("--features", help="tag list or 'fonts.conf'")
         p.add_argument("--feature-target", dest="feature_target")
         p.add_argument("--feature-family", dest="feature_family")
@@ -470,7 +480,8 @@ def main(argv=None):
     asked = bool(a.ask or (not a.no_ask and not fixed and sys.stdin.isatty()))
     if asked:
         from .prompts import ask_config
-        cfg = ask_config(cfg, facts(a.fonts), set(given) if not a.ask else set())
+        fx = facts(a.fonts)
+        cfg = ask_config(cfg, fx, set(given) if not a.ask else set())
     if a.save:
         save_config(cfg)
         print(f"fonttune: settings saved to {CONFIG}")
@@ -484,7 +495,7 @@ def main(argv=None):
     if asked:
         from . import advice
         from .prompts import confirm
-        if not confirm(advice.render(cfg, has_trak=facts(a.fonts)["trak"])):
+        if not confirm(advice.render(cfg, has_trak=fx["trak"])):
             die("aborted")
     if a.cmd == "configure":
         save_config(cfg, a.save_to)

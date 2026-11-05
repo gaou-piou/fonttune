@@ -10,7 +10,17 @@ PKGBUILDs fetch it as a git source pinned to a tag).
 Inputs are copied to `-o` first; steps edit the copies. A `fonttune.json` in
 the output records the version and the steps applied.
 
-Order: weights, trak, otf2ttf, even_spacing | pixel_grid, hint, features, gasp.
+Order: weights, trak, otf2ttf, even_spacing | pixel_grid, hint, alts, features, gasp.
+
+`alts` (`--alts`, on in the `clean` profile) is for fonts that draw alternate letters
+but reach them only through `aalt` (Google Sans: single-storey a, J with a bar,
+slashed zero, ...), which no renderer applies to text. It adds one `cvXX` per
+character, off by default, so fontconfig `fontfeatures`, CSS or `features=fonts.conf`
+can turn on just the ones wanted. Accented letters go with their base letter,
+ligatures with the component that has the alternate (f_t with t); the build prints
+the table (`fonttune/steps/expose_alts.py --list FONT...` shows it without changing
+anything). The lookups run last, so case/liga forms get their own alternate
+(zero.cap -> zero.alt.cap) and tabular or fraction figures are left alone.
 
 `hint` runs ttfautohint (presets balanced, sharp, natural, light; `--hint-mode/-min/-max/-limit/-xheight/-xsnap` override) and adds otf2ttf when it gets OTFs. FreeType runs the bytecode only at hintmedium/hintfull, so under hintslight it changes nothing; `configure` reads the desktop hint style and preselects `no` there. `fonttune hintconf -o 80-x.conf FONT...` writes the fontconfig snippet that enables bytecode hinting for those families (Chromium/Electron excluded).
 
