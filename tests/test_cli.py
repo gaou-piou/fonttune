@@ -36,3 +36,21 @@ def test_config_saved_and_reused(tmp_path):
     r = subprocess.run([sys.executable, str(BIN), "run", "--dry-run", "-o", str(tmp_path / "o"),
                         str(BIN)], capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL)
     assert "gasp" in r.stdout
+
+
+def test_only_skip_and_unknown_step():
+    r = run("run", "--profile", "clean", "--dry-run", "--in-place", "--skip", "gasp", str(BIN))
+    assert r.returncode == 0 and "gasp" not in r.stdout
+    r = run("run", "--dry-run", "--in-place", "--only", "nope", str(BIN))
+    assert r.returncode != 0 and "unknown step" in r.stderr
+
+
+def test_configure_writes_file_and_env_layer(tmp_path):
+    import os
+    out = tmp_path / "c.toml"
+    env = {**os.environ, "FONTTUNE_OTF2TTF": "true", "FONTTUNE_TRAK": "13"}
+    r = subprocess.run([sys.executable, str(BIN), "configure", "--no-config", "--save-to", str(out),
+                        str(BIN)], capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0
+    t = out.read_text()
+    assert "otf2ttf = true" in t and 'trak = "13"' in t

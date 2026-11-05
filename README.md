@@ -10,7 +10,12 @@ PKGBUILDs fetch it as a git source pinned to a tag).
 Inputs are copied to `-o` first; steps edit the copies. A `fonttune.json` in
 the output records the version and the steps applied.
 
-Order: otf2ttf, weights, trak, even_spacing | pixel_grid, features, gasp.
+Order: weights, trak, otf2ttf, even_spacing | pixel_grid, features, gasp.
+
+`fonttune configure --save-to FILE FONT...` asks the questions and writes the settings;
+`fonttune run --config FILE --in-place [--only|--skip steps] FONT...` applies them.
+`FONTTUNE_<KEY>` environment variables (e.g. `FONTTUNE_OTF2TTF=true`) answer a question
+without asking. `trak` is empty, `strip`, `stat` or a point size to bake.
 `pixel_grid` and `even_spacing` are mutually exclusive.
 
 Repository: `git@github.com:gaou-piou/fonttune.git`

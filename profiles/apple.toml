@@ -1,0 +1,4 @@
+# Defaults the Apple SF / New York package offers (questions can still change them).
+otf2ttf = true
+weights = true
+trak = "13"

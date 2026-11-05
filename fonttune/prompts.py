@@ -52,31 +52,57 @@ def number(key, title):
         print("  type a positive number")
 
 
-def ask_config(cfg, facts):
-    """facts: what the input fonts allow ({'trak': bool, 'gridable': bool})."""
+def ask_config(cfg, facts, skip=()):
+    """facts: what the input fonts allow ({'trak': bool, 'gridable': bool}).
+    skip: keys already decided by flags or environment; they are not asked."""
     cfg = dict(cfg)
-    cfg["otf2ttf"] = yesno("otf2ttf", "Convert CFF/OTF outlines to TrueType "
-                           "(FreeType autohints TrueType under hintslight)", cfg["otf2ttf"])
-    if facts["trak"]:
-        cfg["trak"] = choice("trak", "Apple tracking (trak) table", [
-            ("", "keep it"), ("strip", "remove it"),
-            ("custom", "bake tracking in at a point size")], cfg["trak"] or "")
+    ask = lambda k: k not in skip  # noqa: E731
+    if ask("otf2ttf"):
+        cfg["otf2ttf"] = yesno("otf2ttf", "Convert CFF/OTF outlines to TrueType "
+                               "(FreeType autohints TrueType under hintslight)", cfg["otf2ttf"])
+    if ask("weights"):
+        cfg["weights"] = yesno("weights", "Normalise usWeightClass (Apple ships New York "
+                               "Bold/Black mislabelled)", cfg["weights"])
+    if facts["trak"] and ask("trak"):
+        opts = [("", "leave the table (Firefox applies it ~5x too strongly)"),
+                ("strip", "remove it: all programs agree, text ~10% tighter"),
+                ("stat", "keep it and add STAT so HarfBuzz applies it"),
+                ("custom", "remove it and bake the tracking in at a point size")]
+        cur = cfg["trak"] or ""
+        if cur not in [v for v, _ in opts]:
+            opts.insert(2, (cur, f"remove it and bake the tracking in at {cur} pt"))
+        cfg["trak"] = choice("trak", "Apple tracking (trak) table", opts, cur)
         if cfg["trak"] == "custom":
             cfg["trak"] = number("trak", "point size")
-    spacing = choice("even_spacing", "Even out letter-pair spacing (class kerning)", [
-        ("", "no"), ("all", "latin, greek, cyrillic"), ("latin", "latin only"),
-        ("greek", "greek only")], cfg["even_spacing"] or "")
-    cfg["even_spacing"] = spacing
-    if facts["gridable"] and not spacing:
+    if ask("even_spacing"):
+        cfg["even_spacing"] = choice("even_spacing", "Even out letter-pair spacing (class kerning)", [
+            ("", "no"), ("all", "latin, greek, cyrillic"), ("latin", "latin only"),
+            ("greek", "greek only")], cfg["even_spacing"] or "")
+    if facts["gridable"] and not cfg["even_spacing"] and ask("pixel_grid"):
+        cur = str(cfg["pixel_grid"] or "off")
         g = choice("pixel_grid", "Put advances and kerning on a pixel grid", [
             ("off", "no"),
             ("auto", f"from the GNOME interface font size ({auto_ppem():g} ppem now)"),
             ("16", "16 ppem"), ("14", "14 ppem"), ("13", "13 ppem"),
-            ("custom", "type a size in ppem")], cfg["pixel_grid"] or "off")
+            ("custom", "type a size in ppem")], cur)
         cfg["pixel_grid"] = {"off": ""}.get(g, g)
         if g == "custom":
             cfg["pixel_grid"] = number("pixel_grid", "ppem")
-    cfg["gasp"] = choice("gasp", "gasp table", [
-        ("keep", "leave as is"), ("smooth", "anti-alias at all sizes"),
-        ("sized", "size-based"), ("gridfit", "grid-fit at all sizes")], cfg["gasp"])
+    if ask("features"):
+        f = choice("features", "Bake OpenType features into calt (every program applies them)", [
+            ("", "none: leave the fonts as shipped"),
+            ("fonts.conf", "the features active in ~/.config/fontconfig/fonts.conf"),
+            ("custom", "type the tags yourself")], cfg["features"] if cfg["features"] == "fonts.conf" else "")
+        if f == "custom":
+            f = _read("[features] tags, comma separated (e.g. ss06,cv07,case): ").replace(" ", ",")
+        cfg["features"] = f
+    if cfg["features"] and ask("feature_suffix"):
+        cfg["feature_suffix"] = choice("feature_suffix", "Also rename the families so the stock "
+                                       "look stays available", [
+            ("", "no, change the fonts in place"), (" Alt", "yes, suffix ' Alt'")],
+            cfg["feature_suffix"])
+    if ask("gasp"):
+        cfg["gasp"] = choice("gasp", "gasp table", [
+            ("keep", "leave as is"), ("smooth", "anti-alias at all sizes"),
+            ("sized", "size-based"), ("gridfit", "grid-fit at all sizes")], cfg["gasp"])
     return cfg
