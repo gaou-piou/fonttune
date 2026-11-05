@@ -75,9 +75,12 @@ def ask_config(cfg, facts, skip=()):
         if cfg["trak"] == "custom":
             cfg["trak"] = number("trak", "point size")
     if ask("even_spacing"):
-        cfg["even_spacing"] = choice("even_spacing", "Even out letter-pair spacing (class kerning)", [
+        cfg["even_spacing"] = choice("even_spacing", "Even out letter-pair spacing (class kerning). Excludes the pixel grid: choosing it here skips that question", [
             ("", "no"), ("all", "latin, greek, cyrillic"), ("latin", "latin only"),
             ("greek", "greek only")], cfg["even_spacing"] or "")
+    if cfg["even_spacing"] and ask("pixel_grid"):
+        print("\n[pixel_grid] skipped: even_spacing is on and the two exclude each other "
+              "(re-run and answer 'no' to even_spacing to get the pixel grid)")
     if facts["gridable"] and not cfg["even_spacing"] and ask("pixel_grid"):
         cur = str(cfg["pixel_grid"] or "off")
         g = choice("pixel_grid", "Put advances and kerning on a pixel grid", [
