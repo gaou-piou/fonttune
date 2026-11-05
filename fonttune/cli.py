@@ -33,6 +33,7 @@ STEPS = [
     ("otf2ttf", "convert CFF outlines to TrueType (cu2qu); FreeType then autohints them"),
     ("even_spacing", "class-kerning GPOS lookup that evens out letter pairs"),
     ("pixel_grid", "round advances and kerning to whole pixels at one ppem"),
+    ("hint", "ttfautohint bytecode (FreeType runs it at hintmedium/hintfull only; see `hintconf`)"),
     ("features", "bake OpenType features into the font (and rename with a suffix)"),
     ("gasp", "rewrite the gasp table (sized|smooth|gridfit)"),
 ]
@@ -40,12 +41,14 @@ STEP_KEYS = [k for k, _ in STEPS]
 
 DEFAULTS = {
     "otf2ttf": False, "weights": False, "trak": "", "even_spacing": "",
-    "pixel_grid": "", "features": "", "feature_target": "calt",
+    "pixel_grid": "", "hint": "", "hint_mode": "auto", "hint_min": "auto",
+    "hint_max": "auto", "hint_limit": "auto", "hint_xheight": "auto", "hint_xsnap": "auto",
+    "features": "", "feature_target": "calt",
     "feature_family": "", "feature_suffix": "", "gasp": "keep", "ppem": 16.0,
     "even_strength": "auto", "even_depth": "auto", "even_max": "auto", "even_min": "auto",
 }
 BOOLS = {"otf2ttf", "weights"}
-PROMPTED = ("otf2ttf", "weights", "trak", "even_spacing", "pixel_grid", "features",
+PROMPTED = ("otf2ttf", "weights", "trak", "even_spacing", "pixel_grid", "hint", "features",
             "feature_suffix", "gasp")
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fonttune" / "config.toml"
@@ -100,6 +103,13 @@ def validate(cfg):
     if cfg["pixel_grid"] and cfg["even_spacing"]:
         die("pixel_grid and even_spacing are mutually exclusive: pixel_grid "
             "zeroes most of the small kerns even_spacing adds")
+    if cfg["hint"] not in ("", "balanced", "sharp", "natural", "light"):
+        die(f"unknown hint preset {cfg['hint']!r} (balanced, sharp, natural, light)")
+    if str(cfg["hint_mode"]) != "auto" and not re.fullmatch(r"[nqs]{3}", str(cfg["hint_mode"])):
+        die("hint_mode must be auto or 3 letters from n q s")
+    for k in ("hint_min", "hint_max", "hint_limit", "hint_xheight"):
+        if str(cfg[k]) != "auto" and not re.fullmatch(r"\d+", str(cfg[k])):
+            die(f"{k} must be auto or a whole number")
     if cfg["gasp"] not in ("keep", "sized", "smooth", "gridfit"):
         die(f"unknown gasp mode {cfg['gasp']!r}")
     t = str(cfg["trak"])
@@ -211,6 +221,10 @@ def active(cfg, key):
 def run(cfg, ns, fonts, out, dry):
     plan = [k for k in STEP_KEYS if active(cfg, k)
             and (not ns.only or k in ns.only) and k not in ns.skip]
+    if "hint" in plan and "otf2ttf" not in plan and "otf2ttf" not in ns.skip \
+            and any(str(f).lower().endswith(".otf") for f in fonts):
+        plan.insert(plan.index("hint"), "otf2ttf")
+        note("hint needs TrueType outlines: otf2ttf added")
     print("fonttune", __version__, "plan:", ", ".join(plan) or "(copy only)")
     if dry:
         return
@@ -272,6 +286,16 @@ def run(cfg, ns, fonts, out, dry):
             d = step_dir("grid")
             pmap("pixel_grid", jobs, [["--ppem", cfg["pixel_grid"], "-o", d, w] for w in grid])
             merge_back(d)
+        elif step == "hint":
+            hinted = [w for w in ttfs if w.suffix.lower() == ".ttf"]
+            args = []
+            for k, flag in (("mode", "--mode"), ("min", "--min"), ("max", "--max"),
+                            ("limit", "--limit"), ("xheight", "--xheight")):
+                if str(cfg[f"hint_{k}"]) != "auto":
+                    args += [flag, cfg[f"hint_{k}"]]
+            if str(cfg["hint_xsnap"]) != "auto":
+                args += ["--xsnap", "" if cfg["hint_xsnap"] == "none" else cfg["hint_xsnap"]]
+            pmap("hint", jobs, [[cfg["hint"], w, *args] for w in hinted])
         elif step == "features":
             tags = resolve_features(cfg, ttfs, ns) if cfg["features"] else ""
             if tags:
@@ -324,6 +348,10 @@ def main(argv=None):
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("steps", help="list the pipeline steps in order")
+    h = sub.add_parser("hintconf", help="write the fontconfig snippet that enables bytecode hinting")
+    h.add_argument("fonts", nargs="+")
+    h.add_argument("-o", "--out", default="-", help="file to write (default: stdout)")
+    h.add_argument("--name", default="fonttune")
     r = sub.add_parser("run", help="apply the pipeline")
     c = sub.add_parser("configure", help="ask the settings and save them (no fonts are changed)")
     for p in (r, c):
@@ -346,6 +374,9 @@ def main(argv=None):
         p.add_argument("--feature-family", dest="feature_family")
         p.add_argument("--feature-suffix", dest="feature_suffix",
                        help="append to every family name (' Alt'), also where no feature applies")
+        p.add_argument("--hint", help="ttfautohint preset: balanced, sharp, natural or light")
+        for k in ("mode", "min", "max", "limit", "xheight", "xsnap"):
+            p.add_argument(f"--hint-{k}", dest=f"hint_{k}")
         p.add_argument("--gasp")
         p.add_argument("--ask", action="store_true", help="prompt even when flags are given")
         p.add_argument("--no-ask", action="store_true")
@@ -367,6 +398,10 @@ def main(argv=None):
     if a.cmd == "steps":
         for k, d in STEPS:
             print(f"{k:13} {d}")
+        return 0
+    if a.cmd == "hintconf":
+        from . import hintconf
+        hintconf.main(a.fonts, a.out, a.name)
         return 0
     if a.cmd == "run":
         if not a.in_place and not a.out:

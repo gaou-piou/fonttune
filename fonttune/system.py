@@ -27,3 +27,21 @@ def auto_ppem():
     except ValueError:
         t = 1.0
     return round(float(m.group(1)) * 96 / 72 * t, 4)
+
+
+def hintstyle():
+    """'none' | 'slight' | 'medium' | 'full' as the desktop sets it ('' if unknown).
+
+    GNOME's font-hinting first; fontconfig's answer for the default sans-serif
+    otherwise. Note GTK4 with font-rendering=automatic hard-codes slight.
+    """
+    v = _gsettings("font-hinting").strip("'")
+    if v in ("none", "slight", "medium", "full"):
+        return v
+    try:
+        r = subprocess.run(["fc-match", "-v", "sans-serif"], capture_output=True,
+                           text=True, timeout=5, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    m = re.search(r"hintstyle: (\d)", r.stdout)
+    return {"0": "none", "1": "slight", "2": "medium", "3": "full"}.get(m.group(1), "") if m else ""

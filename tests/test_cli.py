@@ -54,3 +54,28 @@ def test_configure_writes_file_and_env_layer(tmp_path):
     assert r.returncode == 0
     t = out.read_text()
     assert "otf2ttf = true" in t and 'trak = "13"' in t
+
+
+def test_hint_plan_and_validation():
+    r = run("run", "--hint", "balanced", "--dry-run", "-o", "/tmp/ft_unused", str(BIN))
+    assert r.returncode == 0 and "hint" in r.stdout
+    r = run("run", "--hint", "bogus", "--dry-run", "-o", "/tmp/ft_unused", str(BIN))
+    assert r.returncode != 0 and "unknown hint preset" in r.stderr
+    r = run("run", "--hint", "light", "--hint-mode", "xyz", "--dry-run", "-o", "/tmp/ft_unused", str(BIN))
+    assert r.returncode != 0 and "hint_mode" in r.stderr
+
+
+def test_hint_runs_and_hintconf(tmp_path):
+    import shutil
+    from fontTools.ttLib import TTFont
+    src = next(iter(sorted(Path("/usr/share/fonts").rglob("*.ttf"))), None)
+    if not src or not shutil.which("ttfautohint"):
+        import pytest
+        pytest.skip("needs a system TTF and ttfautohint")
+    out = tmp_path / "o"
+    r = run("run", "--hint", "light", "-o", str(out), str(src))
+    assert r.returncode == 0, r.stderr
+    assert "fpgm" in TTFont(out / src.name)
+    c = tmp_path / "80.conf"
+    r = run("hintconf", "-o", str(c), str(out / src.name))
+    assert r.returncode == 0 and 'name="hintstyle"' in c.read_text()

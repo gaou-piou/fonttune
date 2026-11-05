@@ -2,7 +2,7 @@
 so the menu text can be tied back to flags, profiles and config.toml."""
 import sys
 
-from .system import auto_ppem
+from .system import auto_ppem, hintstyle
 
 
 def _read(prompt):
@@ -88,6 +88,20 @@ def ask_config(cfg, facts, skip=()):
         cfg["pixel_grid"] = {"off": ""}.get(g, g)
         if g == "custom":
             cfg["pixel_grid"] = number("pixel_grid", "ppem")
+    if facts["gridable"] and ask("hint"):
+        hs = hintstyle()
+        weak = hs in ("slight", "none")
+        if weak:
+            print(f"  note: the desktop uses hint style '{hs}': FreeType then ignores the "
+                  "ttfautohint bytecode and the hints make no difference.")
+        cur = cfg["hint"] or ("" if weak else "balanced")
+        cfg["hint"] = choice("hint", "ttfautohint bytecode hints (`fonttune hintconf` "
+                             "enables them per family)", [
+            ("", "no" + (" (recommended with this hint style)" if weak else "")),
+            ("balanced", "balanced: stem q, 8-50 px, x-height 14 (upstream defaults)"),
+            ("sharp", "sharp: stem s, 6-50 px (max contrast, low DPI)"),
+            ("natural", "natural: stem n, no x-height bump (least distortion)"),
+            ("light", "light: stem n, from 12 px (HiDPI)")], cur)
     if ask("features"):
         f = choice("features", "Bake OpenType features into calt (every program applies them)", [
             ("", "none: leave the fonts as shipped"),

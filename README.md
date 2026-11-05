@@ -10,7 +10,9 @@ PKGBUILDs fetch it as a git source pinned to a tag).
 Inputs are copied to `-o` first; steps edit the copies. A `fonttune.json` in
 the output records the version and the steps applied.
 
-Order: weights, trak, otf2ttf, even_spacing | pixel_grid, features, gasp.
+Order: weights, trak, otf2ttf, even_spacing | pixel_grid, hint, features, gasp.
+
+`hint` runs ttfautohint (presets balanced, sharp, natural, light; `--hint-mode/-min/-max/-limit/-xheight/-xsnap` override) and adds otf2ttf when it gets OTFs. FreeType runs the bytecode only at hintmedium/hintfull, so under hintslight it changes nothing; `configure` reads the desktop hint style and preselects `no` there. `fonttune hintconf -o 80-x.conf FONT...` writes the fontconfig snippet that enables bytecode hinting for those families (Chromium/Electron excluded).
 
 `fonttune configure --save-to FILE FONT...` asks the questions and writes the settings;
 `fonttune run --config FILE --in-place [--only|--skip steps] FONT...` applies them.
