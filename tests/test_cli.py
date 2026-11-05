@@ -128,3 +128,27 @@ def test_dev_toggle(tmp_path):
     assert r("on").stdout.startswith("local:")
     assert (tmp_path / "fonttune" / "dev").read_text().strip() == str(BIN.parent.parent)
     assert r("off").stdout.startswith("git:") and not (tmp_path / "fonttune" / "dev").exists()
+
+
+def test_pixel_grid_asked_before_even_spacing(monkeypatch, capsys):
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import prompts
+    from fonttune.cli import DEFAULTS
+    answers = {"pixel_grid": "14", "even_spacing": "all"}
+    asked = []
+    monkeypatch.setattr(prompts, "choice", lambda k, *a: asked.append(k) or answers.get(k, a[-1]))
+    monkeypatch.setattr(prompts, "yesno", lambda k, *a: a[-1])
+    monkeypatch.setattr(prompts, "hintstyle", lambda: "slight")
+    static = {"trak": False, "gridable": True, "hintable": True, "variable": False}
+    cfg = prompts.ask_config(DEFAULTS, static)
+    assert asked.index("pixel_grid") < asked.index("hint") and "even_spacing" not in asked
+    assert cfg["pixel_grid"] == "14" and cfg["even_spacing"] == ""
+    assert "[even_spacing] skipped" in capsys.readouterr().out
+    answers["pixel_grid"], asked[:] = "off", []
+    cfg = prompts.ask_config(DEFAULTS, static)
+    assert asked.index("pixel_grid") < asked.index("even_spacing") and cfg["even_spacing"] == "all"
+    # a profile default must not hide even_spacing on a variable font
+    asked[:] = []
+    cfg = prompts.ask_config({**DEFAULTS, "pixel_grid": "auto"}, {**static, "gridable": False,
+                                                                  "variable": True})
+    assert "even_spacing" in asked and cfg["pixel_grid"] == ""

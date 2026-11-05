@@ -74,19 +74,16 @@ def ask_config(cfg, facts, skip=()):
         cfg["trak"] = choice("trak", "Apple tracking (trak) table", opts, cur)
         if cfg["trak"] == "custom":
             cfg["trak"] = number("trak", "point size")
-    if ask("even_spacing"):
-        cfg["even_spacing"] = choice("even_spacing", "Even out letter-pair spacing (class kerning). Excludes the pixel grid: choosing it here skips that question", [
-            ("", "no"), ("all", "latin, greek, cyrillic"), ("latin", "latin only"),
-            ("greek", "greek only")], cfg["even_spacing"] or "")
-    if cfg["even_spacing"] and ask("pixel_grid"):
-        print("\n[pixel_grid] skipped: even_spacing is on and the two exclude each other "
-              "(re-run and answer 'no' to even_spacing to get the pixel grid)")
-    if facts.get("variable") and not cfg["even_spacing"] and ask("pixel_grid"):
+    if facts.get("variable") and ask("pixel_grid"):
         print("\n[pixel_grid] skipped: needs static fonts and the input is variable "
-              "(cut statics first to get the pixel grid)")
-    if facts["gridable"] and not cfg["even_spacing"] and ask("pixel_grid"):
+              "(choose the static variant to get the pixel grid)")
+        cfg["pixel_grid"] = ""  # a profile default would only hide even_spacing
+    if cfg["even_spacing"] and "even_spacing" in skip and ask("pixel_grid"):
+        print("\n[pixel_grid] skipped: even_spacing is set and the two exclude each other")
+    elif facts["gridable"] and ask("pixel_grid"):
         cur = str(cfg["pixel_grid"] or "off")
-        g = choice("pixel_grid", "Put advances and kerning on a pixel grid", [
+        g = choice("pixel_grid", "Put advances and kerning on a pixel grid at one size (ppem). "
+                   "Excludes even_spacing: choosing a size here skips that question", [
             ("off", "no"),
             ("auto", f"from the GNOME interface font size ({auto_ppem():g} ppem now)"),
             ("16", "16 ppem"), ("14", "14 ppem"), ("13", "13 ppem"),
@@ -94,6 +91,14 @@ def ask_config(cfg, facts, skip=()):
         cfg["pixel_grid"] = {"off": ""}.get(g, g)
         if g == "custom":
             cfg["pixel_grid"] = number("pixel_grid", "ppem")
+    if cfg["pixel_grid"] and ask("even_spacing"):
+        print("\n[even_spacing] skipped: the pixel grid is on and would round its small kerns "
+              "to zero (answer 'no' to pixel_grid to get even spacing)")
+        cfg["even_spacing"] = ""
+    elif ask("even_spacing"):
+        cfg["even_spacing"] = choice("even_spacing", "Even out letter-pair spacing (class kerning)", [
+            ("", "no"), ("all", "latin, greek, cyrillic"), ("latin", "latin only"),
+            ("greek", "greek only")], cfg["even_spacing"] or "")
     if facts.get("hintable", facts["gridable"]) and ask("hint"):
         hs = hintstyle()
         weak = hs in ("slight", "none")
