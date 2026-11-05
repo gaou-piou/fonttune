@@ -28,8 +28,9 @@ Local testing from a PKGBUILD: run `bin/fonttune dev on` once in this tree. Ever
 `$srcdir/fonttune-local` and builds with it; the build log says `==> fonttune: LOCAL tree`
 and the package's `FONTTUNE_REV` reads `local:<commit>[-dirty]`. `fonttune dev off`
 goes back to the git source, `fonttune dev` shows which one is active.
-For one build only: `FONTTUNE_DEV=/path/to/fonttune makepkg -f` (or `FONTTUNE_DEV=off`
-to ignore the saved tree). `FONTTUNE_REPO`/`FONTTUNE_REF` still pick the git source.
+For one build only: `FONTTUNE_DEV=true makepkg -f` (the saved tree, else the `fonttune`
+directory next to the package's directory), `FONTTUNE_DEV=/path/to/fonttune`, or
+`FONTTUNE_DEV=false` to ignore the saved tree (also 1/yes/on, 0/no/off). `FONTTUNE_REPO`/`FONTTUNE_REF` still pick the git source.
 
 Tests: `python -m pytest tests`.
 

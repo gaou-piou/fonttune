@@ -358,7 +358,7 @@ def dev(action):
         DEV.unlink(missing_ok=True)
     cur = DEV.read_text().strip() if DEV.is_file() else ""
     if cur:
-        print(f"local: PKGBUILDs build with {cur}  ({DEV}; FONTTUNE_DEV=off skips it once)")
+        print(f"local: PKGBUILDs build with {cur}  ({DEV}; FONTTUNE_DEV=false skips it once)")
     else:
         print("git: PKGBUILDs build with the fonttune git source (`fonttune dev on` to switch)")
     return 0
