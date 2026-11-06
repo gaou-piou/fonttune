@@ -33,14 +33,16 @@ without asking. `trak` is empty, `strip`, `stat` or a point size to bake.
 Repository: `git@github.com:gaou-piou/fonttune.git`
 (PKGBUILDs use `https://github.com/gaou-piou/fonttune.git#tag=vX.Y.Z`).
 
-Local testing from a PKGBUILD: run `bin/fonttune dev on` once in this tree. Every
-`*-hinted` PKGBUILD then copies this working tree, uncommitted edits included, into
-`$srcdir/fonttune-local` and builds with it; the build log says `==> fonttune: LOCAL tree`
-and the package's `FONTTUNE_REV` reads `local:<commit>[-dirty]`. `fonttune dev off`
-goes back to the git source, `fonttune dev` shows which one is active.
-For one build only: `FONTTUNE_DEV=true makepkg -f` (the saved tree, else the `fonttune`
-directory next to the package's directory), `FONTTUNE_DEV=/path/to/fonttune`, or
-`FONTTUNE_DEV=false` to ignore the saved tree (also 1/yes/on, 0/no/off). `FONTTUNE_REPO`/`FONTTUNE_REF` still pick the git source.
+Local testing from a PKGBUILD: `FONTTUNE_DEV=true makepkg -f` (also 1/yes/on). The
+`*-hinted` PKGBUILD then copies a local fonttune working tree, uncommitted edits included,
+into `$srcdir/fonttune-local` and builds with it: the tree in `FONTTUNE_DEV_DIR`, else the
+one set with `bin/fonttune dev set [path]` (default: this tree; saved in
+`~/.config/fonttune/dev`, `fonttune dev unset` forgets it, `fonttune dev` shows it), else the
+`fonttune` directory next to the package's directory. With none of them it says so and
+builds with the git source: a missing tree never stops the build. The build log says
+`==> fonttune: LOCAL tree` and the package's `FONTTUNE_REV` reads `local:<commit>[-dirty]`.
+Without `FONTTUNE_DEV` (or false; AUR helpers) the PKGBUILDs always use the git source,
+whatever is set. `FONTTUNE_REPO`/`FONTTUNE_REF` still pick the git source.
 
 Tests: `python -m pytest tests`.
 

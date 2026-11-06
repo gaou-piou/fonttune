@@ -124,10 +124,14 @@ def test_dev_toggle(tmp_path):
     env = {**os.environ, "XDG_CONFIG_HOME": str(tmp_path)}
     r = lambda *a: subprocess.run([sys.executable, str(BIN), "dev", *a], capture_output=True,  # noqa: E731
                                   text=True, env=env)
-    assert r().stdout.startswith("git:")
-    assert r("on").stdout.startswith("local:")
+    assert r().stdout.startswith("no local tree")
+    assert r("set").stdout.startswith("local tree:")
     assert (tmp_path / "fonttune" / "dev").read_text().strip() == str(BIN.parent.parent)
-    assert r("off").stdout.startswith("git:") and not (tmp_path / "fonttune" / "dev").exists()
+    assert r("unset").stdout.startswith("no local tree") and not (tmp_path / "fonttune" / "dev").exists()
+    assert r("on").stdout.startswith("local tree:")  # the old names still work
+    assert r("off").stdout.startswith("no local tree")
+    assert r("set", str(tmp_path)).returncode != 0  # not a fonttune tree
+    assert r("set", str(BIN.parent.parent)).stdout.startswith("local tree:")
 
 
 def test_pixel_grid_asked_before_even_spacing(monkeypatch, capsys):
