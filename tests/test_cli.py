@@ -78,7 +78,8 @@ def test_hint_runs_and_hintconf(tmp_path):
     assert "fpgm" in TTFont(out / src.name)
     c = tmp_path / "80.conf"
     r = run("hintconf", "-o", str(c), str(out / src.name))
-    assert r.returncode == 0 and 'name="hintstyle"' in c.read_text()
+    assert r.returncode == 0 and 'name="hintstyle"' in c.read_text() \
+        and '<edit name="rgba" mode="assign"><const>none</const></edit>' in c.read_text()
 
 
 def test_advice_text():
