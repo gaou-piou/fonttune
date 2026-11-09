@@ -29,6 +29,15 @@ def auto_ppem():
     return round(float(m.group(1)) * 96 / 72 * t, 4)
 
 
+def auto_pt():
+    """GNOME interface font size (pt) x text-scaling-factor: the size body text is set at.
+
+    The size `trak = "auto"` bakes the Apple tracking at (the table is in points).
+    Same source as auto_ppem(): 12 pt at scale 1.0 is 16 ppem.
+    """
+    return round(auto_ppem() * 72 / 96, 4)
+
+
 def hintstyle():
     """'none' | 'slight' | 'medium' | 'full' as the desktop sets it ('' if unknown).
 

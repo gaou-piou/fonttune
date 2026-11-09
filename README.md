@@ -27,7 +27,7 @@ anything). The lookups run last, so case/liga forms get their own alternate
 `fonttune configure --save-to FILE FONT...` asks the questions, prints a summary of the choices with what to set up in the system and browsers, waits for Enter (n aborts), and writes the settings;
 `fonttune run --config FILE --in-place [--only|--skip steps] FONT...` applies them.
 `FONTTUNE_<KEY>` environment variables (e.g. `FONTTUNE_OTF2TTF=true`) answer a question
-without asking. `trak` is empty, `strip`, `stat` or a point size to bake.
+without asking. `trak` is empty, `strip`, `stat`, `auto` (bake at the GNOME interface font size, read when it runs) or a point size to bake.
 `pixel_grid` and `even_spacing` are mutually exclusive.
 
 Repository: `git@github.com:gaou-piou/fonttune.git`

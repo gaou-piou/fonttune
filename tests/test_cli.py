@@ -56,6 +56,20 @@ def test_configure_writes_file_and_env_layer(tmp_path):
     assert "otf2ttf = true" in t and 'trak = "13"' in t
 
 
+def test_trak_auto_resolves_to_ui_font_size(tmp_path):
+    from fontTools.ttLib import TTFont
+    src = next(iter(sorted(Path("/usr/share/fonts").rglob("SF-Pro-Rounded-*.ttf"))), None)
+    if not src or "trak" not in TTFont(src, lazy=True):
+        import pytest
+        pytest.skip("needs a font with a trak table")
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import system
+    r = run("run", "--trak", "auto", "-o", str(tmp_path / "o"), str(src))
+    assert r.returncode == 0, r.stderr
+    assert f"trak auto -> bake at {system.auto_pt():g} pt" in r.stdout
+    assert "trak" not in TTFont(tmp_path / "o" / src.name)
+
+
 def test_hint_plan_and_validation():
     r = run("run", "--hint", "balanced", "--dry-run", "-o", "/tmp/ft_unused", str(BIN))
     assert r.returncode == 0 and "hint" in r.stdout

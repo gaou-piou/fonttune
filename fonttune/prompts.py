@@ -2,7 +2,7 @@
 so the menu text can be tied back to flags, profiles and config.toml."""
 import sys
 
-from .system import auto_ppem, hintstyle
+from .system import auto_ppem, auto_pt, hintstyle
 
 
 def _read(prompt):
@@ -76,10 +76,12 @@ def ask_config(cfg, facts, skip=()):
         opts = [("", "leave the table (Firefox applies it ~5x too strongly)"),
                 ("strip", "remove it: all programs agree, text ~10% tighter"),
                 ("stat", "keep it and add STAT so HarfBuzz applies it"),
+                ("auto", f"remove it and bake the tracking in at the GNOME interface font "
+                         f"size ({auto_pt():g} pt now)"),
                 ("custom", "remove it and bake the tracking in at a point size")]
         cur = cfg["trak"] or ""
         if cur not in [v for v, _ in opts]:
-            opts.insert(2, (cur, f"remove it and bake the tracking in at {cur} pt"))
+            opts.insert(3, (cur, f"remove it and bake the tracking in at {cur} pt"))
         cfg["trak"] = choice("trak", "Apple tracking (trak) table", opts, cur)
         if cfg["trak"] == "custom":
             cfg["trak"] = number("trak", "point size")

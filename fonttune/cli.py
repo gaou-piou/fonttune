@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import __version__
-from .system import auto_ppem
+from .system import auto_ppem, auto_pt
 
 STEPS_DIR = Path(__file__).resolve().parent / "steps"
 PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
@@ -130,12 +130,12 @@ def validate(cfg):
     if cfg["gasp"] not in ("keep", "sized", "smooth", "gridfit"):
         die(f"unknown gasp mode {cfg['gasp']!r}")
     t = str(cfg["trak"])
-    if t not in ("", "strip", "stat"):
+    if t not in ("", "strip", "stat", "auto"):
         try:
             if float(t) <= 0:
                 raise ValueError
         except ValueError:
-            die(f"trak must be empty, strip, stat or a point size, not {t!r}")
+            die(f"trak must be empty, strip, stat, auto or a point size, not {t!r}")
     if cfg["even_spacing"] and not re.fullmatch(
             r"all|(latin|greek|cyrillic)(,(latin|greek|cyrillic))*", cfg["even_spacing"]):
         die("even_spacing must be all or a comma list of latin,greek,cyrillic")
@@ -413,7 +413,7 @@ def main(argv=None):
         p.add_argument("--config", help="read the settings from this file (no questions)")
         p.add_argument("--otf2ttf", action="store_true", default=None)
         p.add_argument("--weights", action="store_true", default=None)
-        p.add_argument("--trak", help="'strip', 'stat' or a size in pt to bake")
+        p.add_argument("--trak", help="'strip', 'stat', 'auto' (bake at the GNOME UI font size) or a size in pt to bake")
         p.add_argument("--even-spacing", dest="even_spacing", help="latin,greek,cyrillic or all")
         p.add_argument("--pixel-grid", dest="pixel_grid", help="auto or target ppem")
         p.add_argument("--ppem", type=float)
@@ -498,6 +498,9 @@ def main(argv=None):
     if cfg["pixel_grid"] != "auto":
         cfg["pixel_grid"] = str(cfg["pixel_grid"]) if cfg["pixel_grid"] else ""
     cfg["trak"] = str(cfg["trak"]) if cfg["trak"] else ""
+    if cfg["trak"] == "auto" and a.cmd == "run":
+        cfg["trak"] = f"{auto_pt():g}"
+        print(f"fonttune: trak auto -> bake at {cfg['trak']} pt")
     validate(cfg)
     if asked:
         from . import advice
