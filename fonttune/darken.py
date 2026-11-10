@@ -53,8 +53,7 @@ def renderer(curve):
 
 def stem_per_ppem(font, glyph="o", size=1000):
     """Width of the left bowl of glyph on its middle row, in px per ppem."""
-    r = renderer(None)
-    try:
+    with renderer(None) as r:
         for _, rows, width, data in r.glyphs(font, size, glyph, mode="none"):
             row = data[rows // 2 * width:(rows // 2 + 1) * width]
             ink = [i for i, v in enumerate(row) if v >= 128]
@@ -64,13 +63,13 @@ def stem_per_ppem(font, glyph="o", size=1000):
             while ink[0] + run < width and row[ink[0] + run] >= 128:
                 run += 1
             return run / size
-    finally:
-        r.close()
     raise SystemExit(f"darken: no '{glyph}' to measure in {font}")
 
 
 def make_curve(y0, a, b):
-    """Flat y0 up to stem a (1/1000 px), linear down to 0 at stem b."""
+    """Flat y0 up to stem a (1/1000 px), linear down to 0 at stem b.
+
+    Valid for y0 <= 3/4 (b - a) with b - a >= 30 (see check())."""
     d = b - a
     return [a, y0, a + d // 3, y0 - y0 // 3, a + 2 * d // 3, y0 // 3, b, 0]
 
@@ -107,34 +106,35 @@ def fit(font, ppem, zero_at, target, text=TEXT):
     if b - a < 30:
         raise SystemExit(f"darken: --zero-at {zero_at:g} is too close to --ppem {ppem:g} "
                          f"(stems {s * ppem:.2f} vs {s * zero_at:.2f} px)")
-    ymax = min(500, b - a - 3)
-    off = renderer(None)
-    base = off.ink(font, ppem, text)
+    ymax = min(500, (b - a) * 3 // 4)
+    with renderer(None) as off:
+        base = off.ink(font, ppem, text)
+    if not base:
+        raise SystemExit(f"darken: {font} draws none of the sample text")
     lo, hi, best = 0, ymax, None
     while lo <= hi:
         y0 = (lo + hi) // 2
         c = make_curve(y0, a, b)
-        r = renderer(c)
-        gain = r.ink(font, ppem, text) / base - 1
-        r.close()
+        if check(c):
+            hi = y0 - 1
+            continue
+        with renderer(c) as r:
+            gain = r.ink(font, ppem, text) / base - 1
         best = (c, gain) if best is None or abs(gain - target) < abs(best[1] - target) else best
         if gain < target:
             lo = y0 + 1
         else:
             hi = y0 - 1
-    off.close()
     return s, best[0], best[1]
 
 
 def report(fonts, curve, sizes, text=TEXT):
-    off, on = renderer(None), renderer(curve)
     rows = []
-    for f in fonts:
-        g_off = gaps(off, f, min(sizes))
-        lost = sorted(g_off - gaps(on, f, min(sizes)))
-        gains = [on.ink(f, p, text) / off.ink(f, p, text) - 1 for p in sizes]
-        rows.append((f, gains, lost))
-    off.close(), on.close()
+    with renderer(None) as off, renderer(curve) as on:
+        for f in fonts:
+            lost = sorted(gaps(off, f, min(sizes)) - gaps(on, f, min(sizes)))
+            gains = [on.ink(f, p, text) / (off.ink(f, p, text) or 1) - 1 for p in sizes]
+            rows.append((f, gains, lost))
     return rows
 
 
@@ -148,6 +148,8 @@ def main(argv=None):
     ap.add_argument("--ink", type=float, default=2.5, help="ink gain at --ppem, percent (default 2.5)")
     ap.add_argument("--quiet", action="store_true", help="print only the FREETYPE_PROPERTIES value")
     a = ap.parse_args(argv)
+    if (a.ppem is not None and a.ppem <= 0) or (a.zero_at is not None and a.zero_at <= 0):
+        ap.error("--ppem and --zero-at must be positive")
     ppem = a.ppem or auto_ppem()
     zero = a.zero_at or 2 * ppem
     if zero <= ppem:
@@ -157,6 +159,10 @@ def main(argv=None):
     s, curve, gain = fit(a.fonts[0], ppem, zero, a.ink / 100)
     if err := check(curve):
         raise SystemExit(f"darken: internal error, curve {curve}: {err}")
+    far = abs(gain * 100 - a.ink) > 1.0
+    if far:
+        print(f"darken: closest reachable gain is {gain * 100:.1f}%, not {a.ink:g}% "
+              f"(--zero-at too close to --ppem, or the steps are coarse)", file=sys.stderr)
     if a.quiet:
         print(props(curve))
         return 0

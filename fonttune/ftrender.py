@@ -11,9 +11,10 @@ set later in the same process needs a fresh `Renderer`.
 import ctypes
 import ctypes.util
 import os
-import platform
+import functools
 import re
 import subprocess
+import sys
 
 from freetype.ft_structs import FT_Face, FT_Library
 
@@ -25,6 +26,7 @@ MODES = {"slight": LOAD_RENDER | TARGET_LIGHT, "none": LOAD_RENDER | LOAD_NO_HIN
 TEXT = "Hamburgefonstiv quick jump ÄÖÜ äöü ίϊΐ αλφάβητο ελληνικά 0123"
 
 
+@functools.cache
 def system_path():
     """Absolute path of the system libfreetype.
 
@@ -34,14 +36,14 @@ def system_path():
     env = os.environ.get("FONTTUNE_LIBFREETYPE")
     if env:
         return env
-    arch = "x86-64" if platform.machine() == "x86_64" else platform.machine()
+    want64 = sys.maxsize > 2 ** 32        # ldconfig tags 64-bit libs x86-64, AArch64, 64bit
     try:
         out = subprocess.run(["ldconfig", "-p"], capture_output=True, text=True,
                              timeout=5, stdin=subprocess.DEVNULL).stdout
     except (OSError, subprocess.SubprocessError):
         out = ""
     for m in re.finditer(r"^\s*libfreetype\.so\.6 \(([^)]*)\) => (\S+)$", out, re.M):
-        if arch in m.group(1) or "," not in m.group(1):
+        if ("64" in m.group(1)) == want64:
             return m.group(2)
     name = ctypes.util.find_library("freetype")
     if not name:
@@ -54,7 +56,9 @@ def _lib():
     lib = ctypes.CDLL(path)
     lib.FT_New_Face.argtypes = [FT_Library, ctypes.c_char_p, ctypes.c_long, ctypes.POINTER(FT_Face)]
     lib.FT_Set_Char_Size.argtypes = [FT_Face, ctypes.c_long, ctypes.c_long, ctypes.c_uint, ctypes.c_uint]
-    lib.FT_Load_Char.argtypes = [FT_Face, ctypes.c_ulong, ctypes.c_int32]
+    lib.FT_Get_Char_Index.argtypes = [FT_Face, ctypes.c_ulong]
+    lib.FT_Get_Char_Index.restype = ctypes.c_uint
+    lib.FT_Load_Glyph.argtypes = [FT_Face, ctypes.c_uint, ctypes.c_int32]
     lib.FT_Done_Face.argtypes = [FT_Face]
     lib.FT_Done_FreeType.argtypes = [FT_Library]
     return lib
@@ -73,20 +77,25 @@ class Renderer:
         return ".".join(str(x.value) for x in v)
 
     def glyphs(self, font, ppem, text=TEXT, mode="slight"):
-        """Yield (char, rows, width, bytes) for each glyph of text at ppem."""
+        """Yield (char, rows, width, bytes) for each glyph of text at ppem.
+
+        Characters the font lacks are skipped (no .notdef boxes)."""
         face = FT_Face()
         if self.lib.FT_New_Face(self.handle, os.fsencode(font), 0, ctypes.byref(face)):
             raise RuntimeError(f"cannot open {font}")
         try:
             self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72)
             for ch in text:
-                if ch == " " or self.lib.FT_Load_Char(face, ord(ch), MODES[mode]):
+                gid = self.lib.FT_Get_Char_Index(face, ord(ch))
+                if ch == " " or not gid or self.lib.FT_Load_Glyph(face, gid, MODES[mode]):
                     continue
                 b = face.contents.glyph.contents.bitmap
-                rows, width, pitch = b.rows, b.width, b.pitch
-                data = bytes(ctypes.string_at(b.buffer, rows * abs(pitch))) if rows else b""
+                rows, width, pitch = b.rows, b.width, abs(b.pitch)
+                data = bytes(ctypes.string_at(b.buffer, rows * pitch)) if rows else b""
                 if pitch != width and rows:
                     data = b"".join(data[r * pitch:r * pitch + width] for r in range(rows))
+                if b.pitch < 0:    # bottom-up: buffer points at the last row
+                    data = b"".join(data[r * width:(r + 1) * width] for r in reversed(range(rows)))
                 yield ch, rows, width, data
         finally:
             self.lib.FT_Done_Face(face)
@@ -96,4 +105,12 @@ class Renderer:
         return sum(sum(d) for _, _, _, d in self.glyphs(font, ppem, text, mode)) / 255
 
     def close(self):
-        self.lib.FT_Done_FreeType(self.handle)
+        if self.handle:
+            self.lib.FT_Done_FreeType(self.handle)
+            self.handle = FT_Library()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
