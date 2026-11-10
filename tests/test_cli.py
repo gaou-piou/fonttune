@@ -109,6 +109,16 @@ def test_advice_text():
     assert "remove --disable-font-subpixel-positioning" in txt and "already right" in txt
     assert "keep it" in txt
     assert "hint style is" in advice.render(dict(cli.DEFAULTS), hs="medium", state=st)
+    # GTK4 under font-rendering=automatic ignores the key; GTK3 has no such key
+    auto = dict(st, rendering="automatic", gtk={"gtk-4.0": "true", "gtk-3.0": "true"})
+    txt = advice.render(dict(cli.DEFAULTS, pixel_grid="16"), hs="slight", state=auto)
+    assert "ignores gtk-hint-font-metrics" in txt and "GTK3 has no such setting" in txt
+    assert "now true" not in txt and "already right" not in txt
+    txt = advice.render(dict(cli.DEFAULTS), hs="slight", state=auto)
+    assert "which is what you want" in txt
+    txt = advice.render(dict(cli.DEFAULTS, hint="balanced"), hs="medium",
+                        state=dict(st, rendering="manual"))
+    assert "already manual" in txt and "hard-codes" not in txt
 
 
 def test_statics_help_and_fit_weight_dispatch():
