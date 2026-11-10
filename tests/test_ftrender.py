@@ -33,3 +33,17 @@ def test_bad_ppem_raises(ppem):
         pytest.skip("needs Adwaita Sans")
     with Renderer() as r, pytest.raises(ValueError, match="ppem"):
         r.ink(font, ppem)
+
+
+def test_system_freetype_without_path(monkeypatch, tmp_path):
+    """Tests that empty PATH (for a fake gsettings) still get the system FreeType,
+    not freetype-py's bundled copy."""
+    from fonttune import ftrender
+    want = ftrender.system_path()
+    ftrender.system_path.cache_clear()
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.delenv("FONTTUNE_LIBFREETYPE", raising=False)
+    try:
+        assert ftrender.system_path() == want
+    finally:
+        ftrender.system_path.cache_clear()

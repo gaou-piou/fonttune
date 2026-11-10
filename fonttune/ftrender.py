@@ -41,11 +41,14 @@ def system_path():
     if env:
         return env
     want64 = sys.maxsize > 2 ** 32        # ldconfig tags 64-bit libs x86-64, AArch64, 64bit
-    try:
-        out = subprocess.run(["ldconfig", "-p"], capture_output=True, text=True,
-                             timeout=5, stdin=subprocess.DEVNULL).stdout
-    except (OSError, subprocess.SubprocessError):
-        out = ""
+    out = ""
+    for ldconfig in ("ldconfig", "/usr/bin/ldconfig", "/sbin/ldconfig"):   # PATH may lack it
+        try:
+            out = subprocess.run([ldconfig, "-p"], capture_output=True, text=True,
+                                 timeout=5, stdin=subprocess.DEVNULL).stdout
+            break
+        except (OSError, subprocess.SubprocessError):
+            continue
     for m in re.finditer(r"^\s*libfreetype\.so\.6 \(([^)]*)\) => (\S+)$", out, re.M):
         if ("64" in m.group(1)) == want64:
             return m.group(2)
