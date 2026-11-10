@@ -159,6 +159,8 @@ def main(argv=None):
     zero = a.zero_at or 2 * ppem
     if zero <= ppem:
         ap.error("--zero-at must be larger than --ppem")
+    if ppem < 1 or zero >= 10000:
+        ap.error("--ppem must be at least 1 and --zero-at below 10000")
     if not 0 < a.ink <= 20:
         ap.error("--ink is a percentage in (0, 20]")
     s, curve, gain = fit(a.fonts[0], ppem, zero, a.ink / 100)

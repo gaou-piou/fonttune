@@ -11,9 +11,22 @@ def run(*a, env=None):
     """bin/fonttune without the caller's FONTTUNE_* answers or config directory."""
     import os
     if env is None:
-        env = {k: v for k, v in os.environ.items() if k != "XDG_CONFIG_HOME" and not
+        env = {k: v for k, v in os.environ.items() if not
                (k.startswith("FONTTUNE_") and k not in ("FONTTUNE_DEV", "FONTTUNE_LIBFREETYPE"))}
+        env["XDG_CONFIG_HOME"] = _empty_config().name
     return subprocess.run([sys.executable, str(BIN), *a], capture_output=True, text=True, env=env)
+
+
+_CONFIG = None
+
+
+def _empty_config():
+    """One empty config directory for the session (no saved fonttune settings)."""
+    global _CONFIG
+    if _CONFIG is None:
+        import tempfile
+        _CONFIG = tempfile.TemporaryDirectory(prefix="fonttune-test-config-")
+    return _CONFIG
 
 
 def desktop(tmp_path, font="Adwaita Sans 11", scale=1.0):
@@ -136,6 +149,13 @@ def test_advice_text():
     assert "now true" not in txt and "already right" not in txt
     txt = advice.render(dict(cli.DEFAULTS), hs="slight", state=auto)
     assert "which is what you want" in txt
+    # switching to manual for the bytecode: say what GTK4's metrics default does then
+    txt = advice.render(dict(cli.DEFAULTS, hint="balanced"), hs="full", state=dict(auto, gtk={}))
+    assert "font-hinting full; GTK4 then hints the metrics" in txt
+    assert "[Settings] gtk-hint-font-metrics=false" in txt
+    txt = advice.render(dict(cli.DEFAULTS, hint="balanced", pixel_grid="16"), hs="slight",
+                        state=dict(auto, gtk={}))
+    assert "font-hinting medium" in txt and "then hints the metrics" not in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="balanced"), hs="medium",
                         state=dict(st, rendering="manual"))
     assert "GTK4 runs the bytecode" in txt and "hard-codes" not in txt
@@ -167,6 +187,9 @@ def test_advice_text():
     assert "does not exist" not in txt and "default (true) is already right" in txt
     txt = advice.render(dict(cli.DEFAULTS), hs="slight", state=dict(st, gtk={"gtk-4.0": None}))
     assert "now unset (true), set false" in txt
+    txt = advice.render(dict(cli.DEFAULTS, pixel_grid="16"), hs="slight",
+                        state=dict(st, gtk={"gtk-4.0": None}))
+    assert "unset (true): already right" in txt
 
 
 def test_probe_reads_gtk4_rendering(tmp_path, monkeypatch):
@@ -393,8 +416,10 @@ def test_darken_cli(tmp_path):
     assert r.returncode == 0 and "autofitter:darkening-parameters=" in r.stdout
     junk = tmp_path / "junk.ttf"
     junk.write_bytes(b"not a font")
+    bitmap = next(Path("/usr/share/fonts/misc").glob("*.pcf.gz"), None)
     for args in (["--ppem", "nan", font], ["--zero-at", "inf", font], [str(tmp_path / "no.ttf")],
-                 ["--quiet", "--ppem", "16", font, str(junk)]):
+                 ["--quiet", "--ppem", "16", font, str(junk)], ["--ppem", "6000", font],
+                 ["--ppem", "0.5", font], *([[str(bitmap)]] if bitmap else [])):
         r = run("darken", *args)
         assert r.returncode == 2 and "error:" in r.stderr and "Traceback" not in r.stderr, args
 
@@ -462,7 +487,7 @@ def test_xheight_snaps_under_hintslight(tmp_path):
     env = desktop(tmp_path)                                  # scale 1: 12 pt = 16 ppem
     r = run("xheight", "--pt", "11,12", font, env=env)
     assert r.returncode == 0 and "clean sizes:" in r.stdout and "+3.0%" in r.stdout
-    for args in (["--pt", "x"], ["--pt", "nan"], ["--pt", ""], ["--tolerance", "nan"]):
+    for args in (["--pt", "x"], ["--pt", "nan"], ["--pt", "inf"], ["--pt", ""], ["--tolerance", "nan"]):
         r = run("xheight", *args, font, env=env)
         assert r.returncode == 2 and "Traceback" not in r.stderr, args
     junk = tmp_path / "junk.ttf"

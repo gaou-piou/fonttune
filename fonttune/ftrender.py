@@ -18,7 +18,7 @@ import sys
 
 from freetype.ft_structs import FT_Face, FT_Library
 
-from freetype.ft_enums import (FT_LOAD_NO_BITMAP, FT_LOAD_NO_HINTING, FT_LOAD_RENDER,
+from freetype.ft_enums import (FT_FACE_FLAG_SCALABLE, FT_LOAD_NO_BITMAP, FT_LOAD_NO_HINTING, FT_LOAD_RENDER,
                                FT_LOAD_TARGET_LIGHT)
 
 # slight = cairo hintslight; full = hintmedium/hintfull (the bytecode runs).
@@ -123,8 +123,9 @@ class Renderer:
         face = FT_Face()
         if err := self.lib.FT_New_Face(self.handle, os.fsencode(font), 0, ctypes.byref(face)):
             return f"FreeType error {err}"
+        scalable = face.contents.face_flags & FT_FACE_FLAG_SCALABLE
         self.lib.FT_Done_Face(face)
-        return None
+        return None if scalable else "no outlines (bitmap font)"
 
     def extent(self, font, ppem, char, mode="slight", axes=None):
         """(top, bottom) of char's hinted outline at ppem, in px from the baseline."""
@@ -145,12 +146,13 @@ class Renderer:
             self.lib.FT_Done_Face(face)
 
     def _size(self, face, font, ppem):
-        if not 0 < ppem < 10000 or self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72):
+        # below 1 ppem FreeType silently renders at 1
+        if not 1 <= ppem < 10000 or self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72):
             raise ValueError(f"cannot set {font} to {ppem} ppem")
 
     def _set_axes(self, face, font, axes):
         from fontTools.ttLib import TTFont
-        with TTFont(font, lazy=True) as t:
+        with TTFont(font, lazy=True, fontNumber=0) as t:
             fvar = t["fvar"].axes if "fvar" in t else []
         unknown = set(axes) - {a.axisTag for a in fvar}
         if unknown:

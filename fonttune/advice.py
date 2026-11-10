@@ -99,8 +99,11 @@ def advice(cfg, hs=None, has_trak=True, state=None):
             add("system", "GTK4 font-rendering is already manual: it follows font-hinting "
                           "(set medium for the bytecode)")
         else:
+            level = hs if hs in ("medium", "full") else "medium"
+            ini = ("" if grid else "; GTK4 then hints the metrics unless "
+                   "~/.config/gtk-4.0/settings.ini has [Settings] gtk-hint-font-metrics=false")
             add("system", "GTK4 hard-codes hintslight unless: gsettings set org.gnome.desktop."
-                          "interface font-rendering manual; ... font-hinting medium")
+                          f"interface font-rendering manual; ... font-hinting {level}{ini}")
         add("browser", "Chromium/Electron are excluded from the snippet on purpose (hintmedium "
                        "rounds every advance there); they keep using the light autohinter")
     elif hs in ("medium", "full"):

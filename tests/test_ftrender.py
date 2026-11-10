@@ -27,7 +27,7 @@ def test_embedded_bitmaps_are_skipped(tmp_path):
             assert r.glyphs(str(EBDT), 11, text, mode) == r.glyphs(str(outlines), 11, text, mode)
 
 
-@pytest.mark.parametrize("ppem", [0, -3, math.nan, math.inf])
+@pytest.mark.parametrize("ppem", [0, 0.5, -3, 10000, math.nan, math.inf])
 def test_bad_ppem_raises(ppem):
     font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
     if not Path(font).is_file():
@@ -48,3 +48,12 @@ def test_system_freetype_without_path(monkeypatch, tmp_path):
         assert Path(got).is_absolute() and "site-packages" not in got
     finally:
         ftrender.system_path.cache_clear()
+
+
+def test_bitmap_only_font_is_unreadable():
+    bitmap = next(Path("/usr/share/fonts/misc").glob("*.pcf.gz"), None)
+    if not bitmap:
+        pytest.skip("needs a PCF font")
+    with Renderer() as r:
+        assert r.unreadable(str(bitmap)) == "no outlines (bitmap font)"
+        assert r.unreadable("/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf") in (None, "not a file")
