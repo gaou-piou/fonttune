@@ -87,10 +87,11 @@ changes rendering on this desktop:
   told to remove the overlaps, as `statics` does).
 - `vf-hints`: a variable font with bytecode. The hints fit the default
   instance; under hintmedium/full the other weights distort.
-- `gasp`: a ttfautohint font whose gasp leaves symmetric smoothing off in a
-  range that starts at or below 20 ppem. Under hintmedium/full FreeType 2.15
-  runs its bytecode differently up to about 20 px, except when the 2nd and
-  3rd stem-mode letters match (natural/light nnn, sharp sss; the font does
+- `gasp`: a ttfautohint font whose gasp leaves symmetric smoothing off in
+  any range. Under hintmedium/full FreeType 2.15 runs its bytecode
+  differently (Noto Sans: 0x3 at every size moves pixels up to 20 px; 0x3
+  only from 21 ppem, or 0x7, moves them up to 48 px too), except when the
+  2nd and 3rd stem-mode letters match (natural/light nnn, sharp sss; the font does
   not record the mode). Other hinters were not measured, so
   their fonts are not flagged.
 - `names`: no family name.

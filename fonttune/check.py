@@ -6,11 +6,12 @@ Every check is tied to a measurement (README, `fonttune xheight`/`darken`):
             the pixels change at 13-20 px, +0.5% ink)
   vf-hints  a variable font with hinting functions (fpgm): the hints fit the default instance
             and distort the others under hintmedium/full (Inter wght 100: +64% ink)
-  gasp      a ttfautohint font whose gasp lacks symmetric smoothing below
-            21 ppem: under hintmedium/full FreeType 2.15 runs its bytecode
-            differently up to ~20 px (not when the 2nd and 3rd stem-mode
-            letters match, e.g. nnn/sss, which the font does not record;
-            other hinters were not measured)
+  gasp      a ttfautohint font whose gasp lacks symmetric smoothing in some
+            range: under hintmedium/full FreeType 2.15 runs its bytecode
+            differently (Noto Sans: 0x3 everywhere moves pixels up to 20 px,
+            0x3 from 21 ppem only or 0x7 at every size tested up to 48 px;
+            not when the 2nd and 3rd stem-mode letters match, e.g. nnn/sss,
+            which the font does not record; other hinters were not measured)
   names     the typographic family (nameID 16, else 1) is empty
 
 --fontbakery also runs `fontbakery check-universal` when it is installed
@@ -28,7 +29,6 @@ from fontTools.ttLib import TTCollection, TTFont
 OVERLAP_SIMPLE = 0x40       # glyf flag on the first point
 OVERLAP_COMPOUND = 0x0400   # component flag
 SYMMETRIC_SMOOTHING = 0x0008
-GASP_LIMIT = 20             # ppem: no measured effect from 21 px on
 
 
 def overlap_glyphs(font):
@@ -59,11 +59,10 @@ def overlap_glyphs(font):
 
 
 def gasp_small_ranges(gasp):
-    """-> ["0-8 ppem", "17+ ppem", ...]: ranges starting at or below GASP_LIMIT
-    whose behaviour lacks symmetric smoothing."""
+    """-> ["0-8 ppem", "17+ ppem", ...]: ranges whose behaviour lacks symmetric smoothing."""
     out, low = [], 0
     for ppem, v in sorted(gasp.gaspRange.items()):
-        if low <= GASP_LIMIT and not v & SYMMETRIC_SMOOTHING:
+        if not v & SYMMETRIC_SMOOTHING:
             out.append(f"{low}+ ppem" if ppem == 0xFFFF else f"{low}-{ppem} ppem")
         low = ppem + 1
     return out
@@ -101,8 +100,8 @@ def check_font(f):
         if bad:
             warn.append(("gasp", f"gasp leaves symmetric smoothing off ({', '.join(bad)}): under "
                                  "hintmedium/full FreeType 2.15 runs ttfautohint's bytecode "
-                                 f"differently up to ~{GASP_LIMIT} px unless its stem mode is "
-                                 "nnn/sss-like (fonttune gasp=smooth)"))
+                                 "differently unless its stem mode is nnn/sss-like "
+                                 "(fonttune gasp=smooth)"))
     if "name" not in f or not family(f["name"]):
         warn.append(("names", "no family name (nameID 16 or 1)"))
     return warn

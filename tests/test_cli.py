@@ -478,7 +478,10 @@ def test_check_flags_measured_problems(tmp_path):
     t.save(hvf)
     msg = dict(check(str(hvf)))["gasp"]
     assert "0-8 ppem, 9-16 ppem, 17+ ppem" in msg
-    t["gasp"].version, t["gasp"].gaspRange = 1, {20: 0xF, 0xFFFF: 0x7}   # only above 20 px
+    t["gasp"].version, t["gasp"].gaspRange = 1, {20: 0xF, 0xFFFF: 0x3}   # only above 20 px:
+    t.save(hvf)                                     # still moves Noto Sans pixels at 21-48 px
+    assert "21+ ppem" in dict(check(str(hvf)))["gasp"]
+    t["gasp"].gaspRange = {0xFFFF: 0xF}
     t.save(hvf)
     assert "gasp" not in dict(check(str(hvf)))
     # blank typographic family falls back to nameID 1
