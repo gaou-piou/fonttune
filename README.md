@@ -82,7 +82,11 @@ skipped there, FreeType autohints them anyway.
 [--axis TAG=VALUE ...] [--regular-wght N|auto] [--no-scale] VF.ttf...`
 cuts static instances (fontTools instancer) and writes RIBBI names, OS/2 and
 italic metadata. Pin other axes with `--axis` (`opsz=14`, `slnt=-10`,
-`FLAR=100`); `--suffix` adds a width/voice to the family. With
+`FLAR=100`); `opsz=auto` is the GNOME interface size in points, the value
+Pango 1.56.2+ gives a variable font's opsz (measured on Pango 1.58: a 12 pt
+layout is as wide as opsz=12; Roboto Flex at opsz 14 instead has 2.3% less
+ink and is 1.2% narrower). Pins outside an axis range are clamped. `--suffix`
+adds a width/voice to the family. With
 `--regular-wght auto` the Regular is cut at the weight whose horizontal bars
 land on whole pixels at 16 ppem (`fonttune fit-weight FONT.ttf` shows the
 table), and the lighter weights are re-spaced to match. Run `fonttune run` on
