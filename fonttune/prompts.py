@@ -170,7 +170,11 @@ def ask_config(cfg, facts, skip=()):
             "is small."), [
             ("", "no, keep the font's own spacing"), ("all", "Latin, Greek and Cyrillic"),
             ("latin", "Latin only"), ("greek", "Greek only")], cfg["even_spacing"] or "")
-    if facts.get("hintable", facts["gridable"]) and ask("hint"):
+    if facts.get("variable") and not facts.get("hintable", True) and ask("hint"):
+        skipped("hint", "ttfautohint hints a variable font only at its default instance and "
+                "distorts the other weights once bytecode is on (choose the static variant)")
+        cfg["hint"] = ""
+    elif facts.get("hintable", facts["gridable"]) and ask("hint"):
         hs = hintstyle()
         weak = hs in ("slight", "none")
         if weak:

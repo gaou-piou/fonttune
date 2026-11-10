@@ -10,10 +10,19 @@ CHROMIUM = ("chrome", "chromium", "brave", "helium", "electron", "code", "slack"
 
 
 def families(fonts):
+    """Families of the fonts that carry bytecode. Unhinted fonts would get no
+    hinting at all under hinting=true/autohint=false, and variable fonts are
+    hinted at their default instance only (other weights get distorted)."""
     from fontTools.ttLib import TTFont
     out = set()
     for p in fonts:
-        n = TTFont(p, lazy=True)["name"]
+        t = TTFont(p, lazy=True)
+        if "fvar" in t or "fpgm" not in t or "prep" not in t:
+            print(f"fonttune: hintconf: {Path(p).name}: "
+                  f"{'variable font' if 'fvar' in t else 'no bytecode'}, left to the autohinter",
+                  file=sys.stderr)
+            continue
+        n = t["name"]
         for ids in ((16, 1),):
             for nid in ids:
                 r = n.getName(nid, 3, 1, 0x409) or n.getName(nid, 1, 0, 0)
@@ -49,7 +58,8 @@ def render(fams, name="fonttune"):
 def main(fonts, out, name="fonttune"):
     fams = families(fonts)
     if not fams:
-        sys.exit("fonttune: no family names found")
+        print("fonttune: hintconf: no hinted static fonts; the snippet changes nothing",
+              file=sys.stderr)
     text = render(fams, name)
     if out == "-":
         sys.stdout.write(text)

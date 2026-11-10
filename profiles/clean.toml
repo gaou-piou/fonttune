@@ -1,5 +1,4 @@
 # Fewest interventions: only what measurably helps under hintslight.
 otf2ttf = true
-gasp = "smooth"
 # Adds features that stay off until asked for; fonts without hidden alternates are untouched.
 alts = true

@@ -89,8 +89,9 @@ def facts(fonts):
         cff |= "CFF " in t or "CFF2" in t
         w = target(t, warn=False)
         weights |= bool(w and w[1] != w[2])
-        # ttfautohint handles variable fonts (hint.py drops cvar); the pixel grid does not
-        if not outlines:
+        # ttfautohint hints a variable font at its default instance only: with
+        # bytecode on, other weights are distorted (Inter wght 100: +64% ink at 13 px)
+        if not outlines or "fvar" in t:
             hintable = False
         if "fvar" in t or not outlines:
             gridable = False
@@ -236,6 +237,15 @@ def active(cfg, key):
 
 
 def run(cfg, ns, fonts, out, dry):
+    off = [k for k in ns.only if not active(cfg, k)]
+    if off:  # not an error: a PKGBUILD runs `--only weights,trak` whatever the config says
+        note(f"--only {','.join(off)}: switched off in this configuration, not run "
+             "(set it with its flag, a profile or config.toml)")
+    names = [Path(f).name for f in fonts]
+    if len(set(names)) < len(names):
+        die("two input fonts share a file name; their outputs would overwrite each other")
+    if ns.in_place and len({Path(f).resolve().parent for f in fonts}) > 1:
+        die("--in-place needs all fonts in one directory (run once per directory)")
     plan = [k for k in STEP_KEYS if active(cfg, k)
             and (not ns.only or k in ns.only) and k not in ns.skip]
     if "hint" in plan and "otf2ttf" not in plan and "otf2ttf" not in ns.skip \
@@ -305,6 +315,12 @@ def run(cfg, ns, fonts, out, dry):
             merge_back(d)
         elif step == "hint":
             hinted = [w for w in ttfs if w.suffix.lower() == ".ttf"]
+            from fontTools.ttLib import TTFont
+            vf = [w for w in hinted if "fvar" in TTFont(w, lazy=True)]
+            if vf:
+                note(f"hint: {len(vf)} variable font(s) left unhinted: ttfautohint hints only "
+                     "the default instance and distorts the others (cut statics to hint)")
+                hinted = [w for w in hinted if w not in vf]
             args = []
             for k, flag in (("mode", "--mode"), ("min", "--min"), ("max", "--max"),
                             ("limit", "--limit"), ("xheight", "--xheight")):

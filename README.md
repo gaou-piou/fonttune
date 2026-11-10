@@ -1,10 +1,10 @@
 # fonttune
 
 One pipeline of font-tuning steps for the `*-hinted` packages (not on the AUR;
-PKGBUILDs fetch it as a git source pinned to a tag).
+PKGBUILDs fetch it as a git source on `main`).
 
     fonttune steps
-    fonttune run --profile clean --pixel-grid 14.6667 -o out/ fonts/*.ttf
+    fonttune run --profile clean --pixel-grid 16 -o out/ fonts/*.ttf
     fonttune run --dry-run ...        # print the plan only
 
 Inputs are copied to `-o` first; steps edit the copies. A `fonttune.json` in

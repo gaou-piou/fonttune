@@ -22,7 +22,7 @@ def test_grid_and_spacing_exclusive():
 
 def test_dry_run_plan():
     r = run("run", "--profile", "clean", "--dry-run", "-o", "/tmp/ft_unused", str(BIN))
-    assert r.returncode == 0 and "otf2ttf" in r.stdout and "gasp" in r.stdout
+    assert r.returncode == 0 and "otf2ttf" in r.stdout and "alts" in r.stdout
 
 
 def test_config_saved_and_reused(tmp_path):
@@ -39,8 +39,8 @@ def test_config_saved_and_reused(tmp_path):
 
 
 def test_only_skip_and_unknown_step():
-    r = run("run", "--profile", "clean", "--dry-run", "--in-place", "--skip", "gasp", str(BIN))
-    assert r.returncode == 0 and "gasp" not in r.stdout
+    r = run("run", "--profile", "clean", "--dry-run", "--in-place", "--skip", "alts", str(BIN))
+    assert r.returncode == 0 and "alts" not in r.stdout
     r = run("run", "--dry-run", "--in-place", "--only", "nope", str(BIN))
     assert r.returncode != 0 and "unknown step" in r.stderr
 
@@ -131,7 +131,7 @@ def test_statics_remove_overlaps(tmp_path):
                    for n in out.getGlyphOrder())
 
 
-def test_variable_fonts_ask_hint_not_grid(monkeypatch, capsys):
+def test_variable_fonts_skip_hint_and_grid(monkeypatch, capsys):
     sys.path.insert(0, str(BIN.parent.parent))
     from fonttune import prompts
     asked = []
@@ -139,12 +139,13 @@ def test_variable_fonts_ask_hint_not_grid(monkeypatch, capsys):
     monkeypatch.setattr(prompts, "yesno", lambda k, *a: asked.append(k) or a[-1])
     monkeypatch.setattr(prompts, "hintstyle", lambda: "full")
     from fonttune.cli import DEFAULTS
-    vf = {"trak": False, "gridable": False, "hintable": True, "variable": True}
-    prompts.ask_config(DEFAULTS, vf)
-    assert "hint" in asked and "pixel_grid" not in asked
-    assert "[pixel_grid] skipped" in capsys.readouterr().out
+    vf = {"trak": False, "gridable": False, "hintable": False, "variable": True}
+    cfg = prompts.ask_config({**DEFAULTS, "hint": "natural"}, vf)
+    assert "hint" not in asked and "pixel_grid" not in asked and cfg["hint"] == ""
+    out = capsys.readouterr().out
+    assert "[pixel_grid] skipped" in out and "[hint] skipped" in out
     asked.clear()
-    prompts.ask_config(DEFAULTS, {**vf, "gridable": True, "variable": False})
+    prompts.ask_config(DEFAULTS, {**vf, "gridable": True, "hintable": True, "variable": False})
     assert "hint" in asked and "pixel_grid" in asked
 
 

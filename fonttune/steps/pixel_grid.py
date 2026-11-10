@@ -6,16 +6,22 @@ stem is rasterised differently from letter to letter (one dark column here, two
 grey ones there) and the weight of a word looks uneven. If every advance and every
 kern value is a whole number of pixels at the target size, all glyphs start on the
 pixel grid and identical letters render identically, with subpixel positioning on
-or off. At any other size nothing is worse than before: positions are just the
-usual fractions again.
+or off. The grid also holds at whole multiples of the size (32 px at 200%
+scaling). At other sizes positions are fractional again, and the rounding shows as
+spacing changes: up to half a target pixel per glyph, scaled with the size.
 
   pixel_grid.py [--ppem 16] -o OUTDIR FONT...
 
 Static TrueType-flavoured fonts only (hmtx is the only place the advances live,
 HVAR / CFF widths are not touched): variable and CFF fonts and monospaced fonts are
 copied unchanged. Outlines and mark anchors are not moved; the rounding goes into the
-right sidebearing, and kerning values are rounded to whole pixels, so a pair's gap
-changes by at most half a pixel from the design.
+right sidebearing, and kerning values are rounded to whole pixels: at the target size a
+pair's gap changes by at most half a pixel, and kerns under half a pixel become 0
+(Inter at 16 ppem keeps 6 of 15 kerned test pairs).
+
+The grid is exact only when unitsPerEm / ppem is a whole number of font units
+(2048 at 16, 1000 at 20). Otherwise every advance is off by a fraction of a unit and
+the error adds up along a line (up to 0.5 px over 80 characters); a warning says so.
 """
 import argparse, os, shutil
 from fontTools.ttLib import TTFont
@@ -47,6 +53,10 @@ def process(src, dst, ppem):
         shutil.copy(src, dst); return "skipped"
     if ppem <= 0: raise SystemExit("--ppem must be positive")
     unit = f["head"].unitsPerEm / ppem
+    if abs(unit - round(unit)) > 1e-6:
+        print(f"  warning: {os.path.basename(src)}: {f['head'].unitsPerEm} units / {ppem:g} ppem "
+              f"= {unit:.3f} units per pixel; advances cannot all be whole pixels "
+              f"(pick a ppem that divides the units per em)")
     hmtx = f["hmtx"].metrics
     n = 0
     for g, (adv, lsb) in list(hmtx.items()):
