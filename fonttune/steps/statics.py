@@ -40,7 +40,7 @@ import os
 import sys
 
 from fontTools.ttLib import TTFont
-from fontTools.varLib.instancer import instantiateVariableFont
+from fontTools.varLib.instancer import OverlapMode, instantiateVariableFont
 
 WEIGHTS = {100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Regular",
            500: "Medium", 600: "SemiBold", 700: "Bold", 800: "ExtraBold",
@@ -84,7 +84,11 @@ def make_static(path, outdir, family, suffix, weight, cut, pins):
     limits.update(pins)
     limits["wght"] = cut
     italic = italic_src or bool(pins.get("slnt", 0))
-    font = instantiateVariableFont(font, limits, updateFontNames=False)
+    # REMOVE merges overlapping contours. The default (KEEP_AND_SET_FLAGS) marks
+    # every glyph OVERLAP_SIMPLE, and FreeType renders such glyphs with 4x4
+    # oversampling: slower and slightly different coverage at the joins.
+    font = instantiateVariableFont(font, limits, updateFontNames=False,
+                                   overlap=OverlapMode.REMOVE)
     if "STAT" in font and "slnt" in pins:
         del font["STAT"]  # its labels no longer describe this font
 

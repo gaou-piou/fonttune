@@ -116,6 +116,21 @@ def test_statics_help_and_fit_weight_dispatch():
     assert "--ppem" in run("fit-weight", "--help").stdout
 
 
+def test_statics_remove_overlaps(tmp_path):
+    """Statics must not carry OVERLAP_SIMPLE flags: FreeType oversamples those glyphs."""
+    import pytest
+    from fontTools.ttLib import TTFont
+    vf = Path("/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf")
+    if not vf.exists():
+        pytest.skip("needs a variable TTF")
+    r = run("statics", "-o", str(tmp_path), "--family", "T", "--weights", "400", str(vf))
+    assert r.returncode == 0, r.stderr
+    out = TTFont(next(tmp_path.glob("*.ttf")))
+    glyf = out["glyf"]
+    assert not any(glyf[n].numberOfContours > 0 and glyf[n].flags[0] & 0x40
+                   for n in out.getGlyphOrder())
+
+
 def test_variable_fonts_ask_hint_not_grid(monkeypatch, capsys):
     sys.path.insert(0, str(BIN.parent.parent))
     from fonttune import prompts
