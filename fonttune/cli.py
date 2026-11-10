@@ -2,6 +2,7 @@
 
     fonttune run [options] -o OUT FONT...
     fonttune steps
+    fonttune ask opsz VF.ttf --out FILE
     fonttune --version
 
 Fonts are copied to OUT first; every step then edits OUT in place, so the
@@ -47,10 +48,12 @@ DEFAULTS = {
     "alts": False, "features": "", "feature_target": "calt",
     "feature_family": "", "feature_suffix": "", "gasp": "keep", "ppem": 16.0,
     "even_strength": "auto", "even_depth": "auto", "even_max": "auto", "even_min": "auto",
+    # reports printed after the steps (fonttune/report.py); they never change a font
+    "check": "", "xheight": False, "darken": "",
 }
-BOOLS = {"otf2ttf", "weights", "alts"}
+BOOLS = {"otf2ttf", "weights", "alts", "xheight"}
 PROMPTED = ("otf2ttf", "weights", "trak", "even_spacing", "pixel_grid", "hint", "alts", "features",
-            "feature_suffix", "gasp")
+            "feature_suffix", "gasp", "check", "xheight", "darken")
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fonttune" / "config.toml"
 DEV = CONFIG.with_name("dev")  # the local tree the PKGBUILDs use with FONTTUNE_DEV=true
@@ -99,8 +102,14 @@ def facts(fonts):
         alts = [k for _, k in plan([TTFont(f) for f in fonts])[1]]
     except Exception:  # noqa: BLE001
         alts = []
+    try:  # darken and xheight measure through freetype-py's structs
+        import freetype  # noqa: F401
+        ft = True
+    except ImportError:
+        ft = False
     return {"trak": trak, "gridable": gridable, "hintable": hintable, "variable": variable,
-            "cff": cff, "weights": weights, "alts": alts}
+            "cff": cff, "weights": weights, "alts": alts, "freetype": ft,
+            "fontbakery": bool(shutil.which("fontbakery"))}
 
 
 def die(msg):
@@ -152,6 +161,16 @@ def validate(cfg):
         for t in str(cfg["features"]).replace(" ", ",").split(","):
             if t and not re.fullmatch(r"[A-Za-z0-9]{4}", t):
                 die(f"features: {t!r} is not a feature tag (e.g. ss06)")
+    if cfg["check"] not in ("", "basic", "fontbakery"):
+        die(f"check must be empty, basic or fontbakery, not {cfg['check']!r}")
+    d = str(cfg["darken"])
+    if d:
+        try:
+            ok = 0 < float(d) <= 20
+        except ValueError:
+            ok = False
+        if not ok:
+            die(f"darken is the ink gain in percent, above 0 and at most 20, not {d!r}")
 
 
 def py(step, *args):
@@ -253,6 +272,9 @@ def run(cfg, ns, fonts, out, dry):
         plan.insert(plan.index("hint"), "otf2ttf")
         note("hint needs TrueType outlines: otf2ttf added")
     print("fonttune", __version__, "plan:", ", ".join(plan) or "(copy only)")
+    from . import report
+    if report.wanted(cfg):
+        print("fonttune: reports after the steps:", ", ".join(report.wanted(cfg)))
     if dry:
         return
     if ns.in_place:
@@ -351,6 +373,9 @@ def run(cfg, ns, fonts, out, dry):
         (Path(out) / "fonttune.json").write_text(json.dumps(
             {"fonttune": __version__, "steps": plan,
              "config": {k: cfg[k] for k in plan}}, indent=2) + "\n")
+    if report.wanted(cfg):
+        from .system import hintstyle
+        report.run(cfg, ttfs, hintstyle())
 
 
 def parse_steps(v):
@@ -414,6 +439,9 @@ def main(argv=None):
     if argv and argv[0] == "check":
         from .check import main as check
         return check(argv[1:])
+    if argv and argv[0] == "ask":
+        from .prompts import ask_main
+        return ask_main(argv[1:])
     ap = argparse.ArgumentParser(prog="fonttune")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -422,7 +450,9 @@ def main(argv=None):
                       ("fit-weight", "find the Regular wght whose bars land on whole pixels"),
                       ("darken", "fit a FREETYPE_PROPERTIES stem-darkening curve to a font"),
                       ("xheight", "which UI sizes keep the font's x-height under hinting"),
-                      ("check", "check built fonts for the rendering problems fonttune measured")):
+                      ("check", "check built fonts for the rendering problems fonttune measured"),
+                      ("ask", "ask a packaging question a PKGBUILD needs before the run "
+                              "(opsz: the optical size statics are cut at)")):
         sub.add_parser(name, help=hlp, add_help=False)
     d = sub.add_parser("dev", help="set the local tree (default: this one, uncommitted edits included) "
                        "the PKGBUILDs build with under FONTTUNE_DEV=true")
@@ -460,6 +490,10 @@ def main(argv=None):
         for k in ("mode", "min", "max", "limit", "xheight", "xsnap"):
             p.add_argument(f"--hint-{k}", dest=f"hint_{k}")
         p.add_argument("--gasp")
+        p.add_argument("--check", help="report after the steps: basic or fontbakery")
+        p.add_argument("--xheight", action="store_true", default=None,
+                       help="report the sizes that keep the Regular's x-height")
+        p.add_argument("--darken", help="report a stem-darkening curve for this ink gain (percent)")
         p.add_argument("--ask", action="store_true", help="prompt even when flags are given")
         p.add_argument("--no-ask", action="store_true")
         p.add_argument("--no-config", action="store_true", help="ignore ~/.config/fonttune/config.toml")

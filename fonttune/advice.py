@@ -8,6 +8,8 @@ LABELS = [
     ("hint", "ttfautohint preset"), ("alts", "aalt alternates -> cvXX"),
     ("features", "baked features"),
     ("feature_suffix", "family suffix"), ("gasp", "gasp table"),
+    ("check", "report: check"), ("xheight", "report: x-height sizes"),
+    ("darken", "report: darken (ink %)"),
 ]
 
 
@@ -67,7 +69,7 @@ def _on(v):
 def summary(cfg):
     lines = []
     for k, label in LABELS:
-        v = cfg[k]
+        v = cfg.get(k, "")
         if k == "hint" and _on(v):
             extra = [f"{x[5:]}={cfg[x]}" for x in ("hint_mode", "hint_min", "hint_max",
                                                     "hint_limit", "hint_xheight", "hint_xsnap")
@@ -212,6 +214,14 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     elif cfg["gasp"] not in ("keep", ""):
         add("system", "gasp only matters to FreeType when the bytecode runs (hintmedium/full); "
                       "otherwise it is for Windows/Wine and validators")
+    if cfg.get("xheight"):
+        add("system", "x-height report: set the GNOME interface font to one of the sizes it "
+                      "marks clean (gsettings set org.gnome.desktop.interface font-name)")
+    if cfg.get("darken"):
+        add("system", "darken report: its FREETYPE_PROPERTIES line goes in "
+                      "~/.config/environment.d/*.conf (log in again)"
+                      + ("" if hs in ("slight", "") else
+                         f"; it acts only under hintslight, the desktop uses '{hs}'"))
     add("system", "after installing: fc-cache -f, then restart the apps (and log out for GTK)")
     return out
 

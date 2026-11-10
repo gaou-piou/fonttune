@@ -3,7 +3,7 @@ so the menu text can be tied back to flags, profiles and config.toml."""
 import sys
 import textwrap
 
-from .system import auto_ppem, auto_pt, hintstyle
+from .system import auto_ppem, auto_pt, font_pt, hintstyle
 
 
 def _read(prompt):
@@ -255,7 +255,151 @@ def ask_config(cfg, facts, skip=()):
             ("smooth", "smooth and grid-fit at every size: the value Google Fonts uses"),
             ("sized", "Microsoft's old size-based scheme: no anti-aliasing from 9 to 16 px"),
             ("gridfit", "grid-fit and grayscale at every size")], cfg["gasp"])
+    ask_reports(cfg, facts, ask, skipped)
     return cfg
+
+
+def ask_reports(cfg, facts, ask, skipped):
+    """The reports printed after the steps (fonttune/report.py): they read the
+    built fonts and change nothing."""
+    if ask("check"):
+        opts = [("", "no check"),
+                ("basic", "fonttune's own checks: a second or two, no extra packages")]
+        if facts.get("fontbakery"):
+            opts.append(("fontbakery", "fonttune's checks, then fontbakery check-universal: "
+                                       "hundreds of checks of names, metrics and tables, many "
+                                       "of them about web or Google Fonts rules; takes minutes"))
+        # cheap and changes nothing, so offered by default (like hint's 'balanced')
+        cur = cfg["check"] if cfg["check"] in [v for v, _ in opts][1:] else "basic"
+        cfg["check"] = choice("check", (
+            "Check the built fonts for the rendering problems fonttune has measured?"
+            "\n\nAfter the steps every output font is read and these are reported:"
+            "\n\noverlap: glyphs flagged as overlapping (OVERLAP_SIMPLE). fontTools' instancer sets "
+            "the flag on every glyph, and FreeType then draws each glyph with 4x4 oversampling: on "
+            "Adwaita Sans the flag alone changes 30-42% of the pixels at 13-20 px."
+            "\n\nvf-hints: bytecode in a variable font. The hints fit the default instance "
+            "only; under hintmedium/hintfull the other weights distort (Inter at wght 100: 64% "
+            "more ink at 13 px)."
+            "\n\ngasp: a ttfautohint font whose gasp table lacks symmetric smoothing at some "
+            "sizes. FreeType 2.15 hands that bit to the bytecode, so under hintmedium/hintfull "
+            "the strokes come out differently there (Noto Sans: depending on the ranges, pixels "
+            "move anywhere from 8 to 48 px)."
+            "\n\nnames: an empty family name."
+            "\n\nOnly a report: no font is changed and the build never stops on it."
+            + ("" if facts.get("fontbakery") else
+               " (fontbakery is not installed, so only fonttune's checks are offered.)")),
+            opts, cur)
+    if not facts.get("freetype", True):
+        for k in ("xheight", "darken"):
+            if ask(k):
+                skipped(k, "measuring needs python-freetype-py (install it and ask again)")
+                cfg[k] = False if k == "xheight" else ""
+        return
+    hs = hintstyle()
+    if ask("xheight"):
+        mode = ("the font's bytecode (hint is on and the desktop uses hint style "
+                f"'{hs}')" if cfg["hint"] and hs in ("medium", "full") else
+                "FreeType's autofitter (hintslight)")
+        cfg["xheight"] = yesno("xheight", (
+            "List the interface sizes at which the Regular keeps its x-height?"
+            "\n\nHinting rounds the height of the lowercase to whole pixels and the capitals "
+            "on their own, so at each size the lowercase grows or shrinks by a different "
+            "amount, also against the capitals. Under hintslight (GTK4's default, Chromium) "
+            "the autofitter rounds up from .375 px: Adwaita Sans gets 3.0% taller lowercase "
+            "at 12 pt and 3.9% shorter at 10 pt."
+            f"\n\nAfter the steps the Regular is measured with {mode} at 9 to 14 pt in half "
+            f"points, at your text scaling, and the sizes where the x-height and its ratio to "
+            f"the capitals stay within 1.5% are marked clean (the interface font is "
+            f"{auto_pt():g} pt now). Pick one of those for the GNOME interface font. Only a "
+            f"report: nothing is changed."), bool(cfg["xheight"]))
+    if ask("darken"):
+        if hs not in ("slight", ""):
+            print(f"  note: the desktop uses hint style '{hs}': stem darkening acts only under "
+                  "hintslight, so the curve would change nothing until you switch to it.")
+        cur = str(cfg["darken"] or "")
+        opts = [("", "no"),
+                ("2.5", "+2.5% ink at the interface size: a light lift that keeps the design's "
+                        "weight"),
+                ("5", "+5%: clearly darker, for thin fonts or low-contrast screens"),
+                ("custom", "type the ink gain in percent (above 0, at most 20)")]
+        if cur not in [v for v, _ in opts]:
+            opts.insert(3, (cur, f"+{cur}% (the current setting)"))
+        d = choice("darken", (
+            "Fit a stem-darkening curve to the Regular and print the setting for it?"
+            "\n\nUnder hintslight FreeType can thicken thin stems (stem darkening), by an "
+            "amount read off one global curve. The stock curve adds about 9% ink to a "
+            "regular interface font at 16 px, more than most fonts need, and it is all or "
+            "nothing."
+            f"\n\nAfter the steps the stem of 'o' in the Regular is measured on the system "
+            f"FreeType and a curve is fitted that adds the chosen ink at the interface size "
+            f"({auto_ppem():g} ppem now) and fades to nothing at twice that size, so HiDPI "
+            f"text is left alone. It prints a FREETYPE_PROPERTIES line for "
+            f"~/.config/environment.d/; nothing is written. The setting is global: every "
+            f"autofitted or CFF font gets the same curve, and only hintslight text changes "
+            f"(not GTK4 without hinting, not Chromium)."), opts, cur)
+        if d == "custom":
+            while True:
+                d = number("darken", "ink gain in percent")
+                if float(d) <= 20:
+                    break
+                print("  at most 20")
+        cfg["darken"] = d
+
+
+def ask_opsz(lo, hi, default):
+    """The optical size to cut statics at: 'auto' or a number (a PKGBUILD clamps it)."""
+    pt = font_pt()
+    cut = min(max(pt, lo), hi)
+    opts = [("auto", f"the GNOME interface font size, read when the package builds ({pt:g} pt now"
+                     + (f", cut at {cut:g}" if cut != pt else "") + "). A clean chroot or a "
+                     "desktop without GNOME's settings reads GNOME's default, 11"),
+            (f"{default:g}", "the font's default optical size: the design the variable font "
+                             "has when no size is applied to it"),
+            ("custom", f"type a size in points ({lo:g} to {hi:g})")]
+    v = choice("opsz", (
+        "Optical size (opsz) to cut the static fonts at?"
+        "\n\nThe variable font redraws its letters for the size they are read at: small "
+        "optical sizes get wider letters, looser spacing and sturdier thin strokes, large "
+        "ones tighter and finer. A static font keeps the one optical size it was cut at, "
+        "whatever size it is used at."
+        "\n\nPango (1.56.2 and later) sets opsz to the point size when it draws a variable "
+        "font, so statics cut at the GNOME interface size look like the variable font does in "
+        "the interface: Roboto Flex at 12 pt cut at opsz 14 instead of 12 has 2.3% less ink "
+        "and is 1.2% narrower. text-scaling-factor does not count: GTK scales through the "
+        "resolution and Pango keeps the point size. The value used is recorded in "
+        "/usr/share/doc/<package>/STATIC_OPSZ."), opts, "auto")
+    if v == "custom":
+        while True:
+            v = number("opsz", "optical size in points")
+            if lo <= float(v) <= hi:
+                break
+            print(f"  between {lo:g} and {hi:g}")
+    return v
+
+
+def ask_main(argv=None):
+    """`fonttune ask opsz VF --out FILE`: a question a PKGBUILD asks before the
+    pipeline (statics are cut before `fonttune run`). The questions go to the
+    terminal and the answer to FILE."""
+    import argparse
+    from pathlib import Path
+
+    from fontTools.ttLib import TTFont
+    ap = argparse.ArgumentParser(prog="fonttune ask", description=ask_main.__doc__)
+    ap.add_argument("what", choices=("opsz",))
+    ap.add_argument("font", help="the variable font the statics are cut from")
+    ap.add_argument("--out", required=True, help="file the answer is written to")
+    a = ap.parse_args(argv)
+    try:
+        with TTFont(a.font, lazy=True, fontNumber=0) as t:
+            axes = {x.axisTag: x for x in t["fvar"].axes} if "fvar" in t else {}
+    except Exception as e:  # noqa: BLE001 - fontTools raises many types on broken fonts
+        ap.error(f"cannot read {a.font} ({type(e).__name__})")
+    if "opsz" not in axes:
+        ap.error(f"{a.font} has no opsz axis")
+    ax = axes["opsz"]
+    Path(a.out).write_text(f"{ask_opsz(ax.minValue, ax.maxValue, ax.defaultValue)}\n")
+    return 0
 
 
 def confirm(text):

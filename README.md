@@ -30,6 +30,16 @@ anything). The lookups run last, so case/liga forms get their own alternate
 without asking. `trak` is empty, `strip`, `stat`, `auto` (bake at the GNOME interface font size, read when it runs) or a point size to bake.
 `pixel_grid` and `even_spacing` are mutually exclusive.
 
+The last three questions pick reports that run after the steps on the built
+fonts and change nothing: `check` (empty, `basic` or `fontbakery`; default
+`basic`), `xheight` (true/false: the clean UI sizes of the font closest to
+Regular, measured the way this desktop hints) and `darken` (empty or the ink
+gain in percent, above 0 and at most 20: prints the `FREETYPE_PROPERTIES` line
+for it). Flags `--check`, `--xheight`, `--darken`; env `FONTTUNE_CHECK`,
+`FONTTUNE_XHEIGHT`, `FONTTUNE_DARKEN`. A failing report is printed and skipped,
+never stops the build. xheight and darken need python-freetype-py; without it
+`configure` skips them and says why.
+
 Repository: `git@github.com:gaou-piou/fonttune.git`
 (PKGBUILDs use `https://github.com/gaou-piou/fonttune.git#tag=vX.Y.Z`).
 
@@ -112,7 +122,10 @@ text-scaling-factor, which GTK applies through the resolution), the value
 Pango 1.56.2+ gives a variable font's opsz (measured on Pango 1.58: a 12 pt
 layout renders pixel for pixel as opsz=12, at 96 and 120 dpi; Roboto Flex at opsz 14 instead has 2.3% less
 ink and is 1.2% narrower). Pins outside an axis range are clamped. `--suffix`
-adds a width/voice to the family. With
+adds a width/voice to the family. `fonttune ask opsz VF.ttf --out FILE` asks
+for the opsz pin with these numbers (auto, the font default or a size in the
+axis range) and writes the answer to FILE; the static PKGBUILDs ask it on a
+terminal when `STATIC_OPSZ` is unset. With
 `--regular-wght auto` the Regular is cut at the weight whose horizontal bars
 land on whole pixels at 16 ppem (`fonttune fit-weight FONT.ttf` shows the
 table), and the lighter weights are re-spaced to match. Run `fonttune run` on

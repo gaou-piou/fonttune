@@ -2,6 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 
 BIN = Path(__file__).resolve().parent.parent / "bin" / "fonttune"
 
@@ -115,6 +116,7 @@ def test_hint_plan_and_validation():
 
 def test_hint_runs_and_hintconf(tmp_path):
     import shutil
+
     from fontTools.ttLib import TTFont
     src = next(iter(sorted(Path("/usr/share/fonts").rglob("*.ttf"))), None)
     if not src or not shutil.which("ttfautohint"):
@@ -285,6 +287,7 @@ def test_pixel_grid_asked_before_even_spacing(monkeypatch, capsys):
 def test_facts_skip_irrelevant_questions(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(BIN.parent.parent))
     from fontTools.fontBuilder import FontBuilder
+
     from fonttune import prompts
     from fonttune.cli import DEFAULTS, facts
 
@@ -325,6 +328,7 @@ def test_expose_alts(tmp_path, monkeypatch, capsys):
     from fontTools.fontBuilder import FontBuilder
     from fontTools.pens.ttGlyphPen import TTGlyphPen
     from fontTools.ttLib import TTFont
+
     from fonttune import prompts
     from fonttune.cli import DEFAULTS, facts
 
@@ -430,6 +434,7 @@ def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
     the bytecode runs, and on 2.15 gasp 'sized' changes a balanced (qsq) font but
     not a sharp (sss) one."""
     import shutil
+
     import pytest
     src = Path("/usr/share/fonts/noto/NotoSans-Regular.ttf")
     if not src.is_file() or not shutil.which("ttfautohint"):
@@ -504,6 +509,7 @@ def test_check_flags_measured_problems(tmp_path):
     """check: overlap flags, hinted VF, gasp without symmetric smoothing; a clean
     static passes. The overlap flag alone must also change the rendering."""
     import shutil
+
     import pytest
     from fontTools.ttLib import TTFont, newTable
     from fontTools.varLib.instancer import OverlapMode, instantiateVariableFont
@@ -609,3 +615,116 @@ def test_check_flags_measured_problems(tmp_path):
     fb.chmod(0o755)
     r = run("check", "--fontbakery", str(clean), env={**clean_env(), "PATH": str(fb.parent)})
     assert r.returncode == 1 and "clean.ttf: ok" in r.stdout
+
+
+def test_report_questions(monkeypatch, capsys):
+    """check, xheight and darken are asked after gasp, explained, and skipped
+    when the measurement cannot run."""
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import prompts
+    from fonttune.cli import DEFAULTS
+    asked, answers = {}, {"check": "basic", "xheight": True, "darken": "2.5"}
+
+    def choice(k, title, opts, default):
+        asked[k] = (title, [v for v, _ in opts])
+        return answers.get(k, default)
+
+    def yesno(k, title, default):
+        asked[k] = (title, None)
+        return answers.get(k, default)
+    monkeypatch.setattr(prompts, "choice", choice)
+    monkeypatch.setattr(prompts, "yesno", yesno)
+    monkeypatch.setattr(prompts, "hintstyle", lambda: "medium")
+    static = {"trak": False, "gridable": True, "hintable": True, "variable": False}
+    cfg = prompts.ask_config({**DEFAULTS, "hint": "balanced"},
+                             {**static, "freetype": True, "fontbakery": False})
+    assert (cfg["check"], cfg["xheight"], cfg["darken"]) == ("basic", True, "2.5")
+    assert list(asked)[-3:] == ["check", "xheight", "darken"]
+    assert "fontbakery" not in asked["check"][1] and "30-42%" in asked["check"][0]
+    assert "the font's bytecode" in asked["xheight"][0]
+    assert "stem darkening acts only under hintslight" in capsys.readouterr().out
+    asked.clear()
+    cfg = prompts.ask_config({**DEFAULTS, "xheight": True, "darken": "5"},
+                             {**static, "freetype": False, "fontbakery": True})
+    assert "fontbakery" in asked["check"][1] and "xheight" not in asked and "darken" not in asked
+    assert cfg["xheight"] is False and cfg["darken"] == ""
+    out = capsys.readouterr().out
+    assert "[xheight] skipped" in out and "[darken] skipped" in out
+
+
+def test_run_prints_reports(tmp_path):
+    font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
+    if not Path(font).is_file():
+        pytest.skip("needs Adwaita Sans")
+    pytest.importorskip("freetype")
+    env = desktop(tmp_path)
+    r = run("run", "--no-ask", "--no-config", "--check", "basic", "--xheight", "--darken", "2.5",
+            "-o", str(tmp_path / "out"), font, env=env)
+    assert r.returncode == 0, r.stderr
+    assert "reports after the steps: check, xheight, darken" in r.stdout
+    for part in ("══ fonttune check ══", "══ fonttune xheight (slight) ══", "clean sizes:",
+                 "══ fonttune darken ══", "FREETYPE_PROPERTIES="):
+        assert part in r.stdout, part
+    for args, why in ((["--darken", "30"], "darken is the ink gain"),
+                      (["--darken", "x"], "darken is the ink gain"),
+                      (["--check", "full"], "check must be")):
+        r = run("run", "--no-ask", "--no-config", "--dry-run", *args, "-o", str(tmp_path / "o"),
+                font, env=env)
+        assert r.returncode != 0 and why in r.stderr, args
+
+
+def test_report_picks_regular_and_survives_failures(tmp_path, capsys):
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fontTools.fontBuilder import FontBuilder
+    from fontTools.pens.ttGlyphPen import TTGlyphPen
+
+    from fonttune import report
+
+    def font(name, weight, italic=False):
+        fb = FontBuilder(1000, isTTF=True)
+        fb.setupGlyphOrder([".notdef"])
+        fb.setupCharacterMap({})
+        fb.setupGlyf({".notdef": TTGlyphPen(None).glyph()})
+        fb.setupHorizontalMetrics({".notdef": (500, 0)})
+        fb.setupHorizontalHeader()
+        fb.setupNameTable({"familyName": "T", "styleName": name})
+        fb.setupOS2(usWeightClass=weight, fsSelection=1 if italic else 0x40)
+        fb.setupPost(italicAngle=-10 if italic else 0)
+        fb.save(tmp_path / f"{name}.ttf")
+        return str(tmp_path / f"{name}.ttf")
+
+    fonts = [font("Bold", 700), font("Italic", 400, True), font("Light", 300)]
+    junk = tmp_path / "junk.ttf"
+    junk.write_bytes(b"not a font")
+    assert report.regular([str(junk), *fonts]).endswith("Light.ttf")
+    report._call("missing", "no_such_module", [])
+    assert "no_such_module skipped" in capsys.readouterr().out
+
+
+def test_ask_opsz(tmp_path):
+    vf = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"   # opsz 14-32
+    if not Path(vf).is_file():
+        pytest.skip("needs Adwaita Sans")
+    from fontTools.ttLib import TTFont
+    ax = next(a for a in TTFont(vf)["fvar"].axes if a.axisTag == "opsz")
+    env = desktop(tmp_path, "Adwaita Sans 11")
+    out = tmp_path / "answer"
+
+    def ask(answers, font=vf):
+        return subprocess.run([sys.executable, str(BIN), "ask", "opsz", font, "--out", str(out)],
+                              input=answers, capture_output=True, text=True, env=env)
+    r = ask("\n")
+    assert r.returncode == 0 and out.read_text() == "auto\n"
+    text = " ".join(r.stdout.split())
+    assert f"11 pt now, cut at {ax.minValue:g}" in text and "STATIC_OPSZ" in text
+    r = ask("custom\n40\n20\n")
+    assert out.read_text() == "20\n" and f"between {ax.minValue:g} and {ax.maxValue:g}" in r.stdout
+    ask("2\n")
+    assert out.read_text() == f"{ax.defaultValue:g}\n"
+    static = tmp_path / "static.ttf"
+    t = TTFont(vf)
+    from fontTools.varLib.instancer import instantiateVariableFont
+    instantiateVariableFont(t, {a.axisTag: None for a in t["fvar"].axes}, inplace=True)
+    t.save(static)
+    r = ask("\n", str(static))
+    assert r.returncode == 2 and "no opsz axis" in r.stderr
