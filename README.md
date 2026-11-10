@@ -46,6 +46,22 @@ whatever is set. `FONTTUNE_REPO`/`FONTTUNE_REF` still pick the git source.
 
 Tests: `python -m pytest tests`.
 
+## Stem darkening: `darken`
+
+`fonttune darken [--ppem 16] [--zero-at 32] [--ink 2.5] FONT [FONT...]`
+prints a `FREETYPE_PROPERTIES` line with a darkening curve fitted to the
+first font: the text gains `--ink` percent of ink at `--ppem` (default: the
+GNOME interface size) and nothing from `--zero-at` (default twice that, the
+HiDPI screen) up. FreeType's stock curve adds about 9% at 16 px. The gain
+moves in steps of about 1% (FreeType rounds the amount to 1/64 px), so the
+closest step wins. It shows the gain at a few sizes for every font given and
+any dotted letter (`i`, `ä`, `ΐ`) whose dot merges into the body. It only
+affects text drawn with hintslight (cairo/GTK3, GTK4 with hinting on), and
+every autofitted or CFF font on the system gets the same curve. Nothing is
+written: put the line in `~/.config/environment.d/` yourself. The
+measurements use the system FreeType (`fonttune/ftrender.py`); freetype-py
+wheels bundle an older one.
+
 ## Variable fonts: `statics` and `fit-weight`
 
 `fonttune statics -o OUT --family NAME [--suffix S] [--weights "300 400 700"]

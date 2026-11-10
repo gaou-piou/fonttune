@@ -291,3 +291,33 @@ def test_expose_alts(tmp_path, monkeypatch, capsys):
     asked.clear()
     prompts.ask_config(DEFAULTS, {"trak": False, "gridable": True, "alts": []})
     assert "alts" not in asked and "[alts] skipped" in capsys.readouterr().out
+
+
+def test_darken_curve_hits_target_and_fades_out():
+    import pytest
+    font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
+    if not Path(font).is_file():
+        pytest.skip("needs Adwaita Sans")
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import darken
+    from fonttune.ftrender import Renderer, system_path
+    assert Path(system_path()).is_absolute()
+    _, curve, gain = darken.fit(font, 16, 32, 0.025)
+    assert darken.check(curve) == ""
+    assert 0.01 < gain < 0.04
+    [(_, gains, lost)] = darken.report([font], curve, [16, 32])
+    assert abs(gains[1]) < 0.005 and lost == []
+    assert darken.check([500, 400, 400, 300, 1667, 275, 2333, 0]) == "x must increase"
+    assert darken.check([500, 400, 600, 100, 1667, 275, 2333, 0]) == "y must not increase"
+    assert darken.check([500, 400, 600, 200, 1667, 100, 2333, 0]) == "a segment is steeper than -1"
+    r = Renderer()
+    assert r.version() != "" and r.ink(font, 16) > 0
+
+
+def test_darken_cli():
+    import pytest
+    font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
+    if not Path(font).is_file():
+        pytest.skip("needs Adwaita Sans")
+    r = run("darken", "--ppem", "16", "--quiet", font)
+    assert r.returncode == 0 and "autofitter:darkening-parameters=" in r.stdout
