@@ -123,11 +123,13 @@ def test_advice_text():
     txt = advice.render(dict(cli.DEFAULTS, hint="balanced", gasp="sized"), hs="full", state=st)
     assert "lacks symmetric smoothing" in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="natural", gasp="sized"), hs="full", state=st)
-    assert "lacks symmetric smoothing" not in txt and "natural stems (nnn)" in txt
+    assert "lacks symmetric smoothing" not in txt and "stem mode nnn" in txt
+    txt = advice.render(dict(cli.DEFAULTS, hint="sharp", gasp="sized"), hs="full", state=st)
+    assert "lacks symmetric smoothing" not in txt and "stem mode sss" in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="natural", hint_mode="qsq", gasp="sized"), hs="full", state=st)
     assert "lacks symmetric smoothing" in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="balanced", hint_mode="qsn", gasp="sized"), hs="full", state=st)
-    assert "natural stems (qsn)" in txt
+    assert "lacks symmetric smoothing" in txt                    # measured: 23-46% of pixels
     txt = advice.render(dict(cli.DEFAULTS, hint="", gasp="sized"), hs="full", state=st)
     assert "lacks symmetric smoothing" not in txt and "gasp only matters" in txt
     txt = advice.render(dict(cli.DEFAULTS, gasp="smooth"), hs="slight", state=st)
@@ -367,7 +369,8 @@ def test_darken_cli():
 
 def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
     """System FreeType: ttfautohint and gasp change no pixel under hintslight; at full
-    the bytecode runs, and on 2.15 gasp 'sized' changes a balanced font."""
+    the bytecode runs, and on 2.15 gasp 'sized' changes a balanced (qsq) font but
+    not a sharp (sss) one."""
     import shutil
     import pytest
     src = Path("/usr/share/fonts/noto/NotoSans-Regular.ttf")
@@ -391,6 +394,14 @@ def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
         assert bitmaps(plain, "full") != bitmaps(hinted, "full")      # the bytecode does run at full
         if tuple(map(int, r.version().split("."))) >= (2, 15):       # 2.15: gasp reaches the bytecode
             assert bitmaps(hinted, "full") != bitmaps(sized, "full")
+            # ...only when the 2nd and 3rd stem-mode letters differ: sharp (sss) is unchanged
+            sharp, sharp_sized = tmp_path / "sharp.ttf", tmp_path / "sharp-sized.ttf"
+            shutil.copy(plain, sharp)
+            subprocess.run([sys.executable, "-I", str(steps / "hint.py"), "sharp", str(sharp)], check=True)
+            shutil.copy(sharp, sharp_sized)
+            subprocess.run([sys.executable, "-I", str(steps / "set_gasp.py"), "sized", str(sharp_sized)],
+                           check=True)
+            assert bitmaps(sharp, "full") == bitmaps(sharp_sized, "full")
     finally:
         r.close()
 

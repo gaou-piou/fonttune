@@ -247,9 +247,9 @@ def ask_config(cfg, facts, skip=()):
             "\n\nIt tells a renderer at which sizes to grid-fit and to anti-alias. Under "
             "hintslight (and with no hinting) FreeType ignores it. FreeType 2.15 passes its "
             "symmetric-smoothing bit to the bytecode, so with hintmedium/hintfull 'sized' and "
-            "'gridfit' (which lack it) change ttfautohint's result (unless the stems are natural, mode ??n) up to "
-            "about 20 px; 'smooth' "
-            "matches what ttfautohint writes. Otherwise it is for Windows and font "
+            "'gridfit' (which lack it) change ttfautohint's result up to about 20 px, "
+            "unless the 2nd and 3rd stem-mode letters match (natural nnn, sharp sss); "
+            "'smooth' matches what ttfautohint writes. Otherwise it is for Windows and font "
             "validators (fontbakery wants it present)."), [
             ("keep", "leave it as the font (or ttfautohint) wrote it"),
             ("smooth", "smooth and grid-fit at every size: the value Google Fonts uses"),

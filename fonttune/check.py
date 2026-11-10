@@ -8,8 +8,9 @@ Every check is tied to a measurement (README, `fonttune xheight`/`darken`):
             and distort the others under hintmedium/full (Inter wght 100: +64% ink)
   gasp      a ttfautohint font whose gasp lacks symmetric smoothing below
             21 ppem: under hintmedium/full FreeType 2.15 runs its bytecode
-            differently up to ~20 px (not with natural stems, which the font
-            does not record; other hinters were not measured)
+            differently up to ~20 px (not when the 2nd and 3rd stem-mode
+            letters match, e.g. nnn/sss, which the font does not record;
+            other hinters were not measured)
   names     the typographic family (nameID 16, else 1) is empty
 
 --fontbakery also runs `fontbakery check-universal` when it is installed
@@ -100,8 +101,8 @@ def check_font(f):
         if bad:
             warn.append(("gasp", f"gasp leaves symmetric smoothing off ({', '.join(bad)}): under "
                                  "hintmedium/full FreeType 2.15 runs ttfautohint's bytecode "
-                                 f"differently up to ~{GASP_LIMIT} px unless the stems are "
-                                 "natural (fonttune gasp=smooth)"))
+                                 f"differently up to ~{GASP_LIMIT} px unless its stem mode is "
+                                 "nnn/sss-like (fonttune gasp=smooth)"))
     if "name" not in f or not family(f["name"]):
         warn.append(("names", "no family name (nameID 16 or 1)"))
     return warn

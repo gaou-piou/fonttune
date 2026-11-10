@@ -89,8 +89,9 @@ changes rendering on this desktop:
   instance; under hintmedium/full the other weights distort.
 - `gasp`: a ttfautohint font whose gasp leaves symmetric smoothing off in a
   range that starts at or below 20 ppem. Under hintmedium/full FreeType 2.15
-  runs its bytecode differently up to about 20 px, except with natural stems
-  (which the font does not record). Other hinters were not measured, so
+  runs its bytecode differently up to about 20 px, except when the 2nd and
+  3rd stem-mode letters match (natural/light nnn, sharp sss; the font does
+  not record the mode). Other hinters were not measured, so
   their fonts are not flagged.
 - `names`: no family name.
 

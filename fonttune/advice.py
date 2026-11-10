@@ -183,20 +183,22 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     if cfg["feature_suffix"]:
         add("system", f"families are renamed with '{cfg['feature_suffix']}': choose "
                       "that name in GNOME Tweaks / settings and per-app font settings")
-    # Measured on 2.15 (Noto Sans): with a strong/quantized stem mode for
-    # DirectWrite (3rd letter q/s), sized/gridfit change 23-55% of pixels up to
-    # ~20 px; with natural stems (n) nothing. The x-height setting plays no part.
+    # Measured on 2.15 (Noto Sans): without the symmetric-smoothing bit ttfautohint
+    # switches from the 3rd stem-mode letter (DirectWrite) to the 2nd (GDI), so
+    # sized/gridfit change 23-55% of pixels up to ~20 px when those letters differ
+    # (qsq, qsn, nns) and nothing when they match (nnn, sss).
     hinted = cfg["hint"] in PRESETS
     mode = (cfg.get("hint_mode") if str(cfg.get("hint_mode", "auto")) != "auto"
             else PRESETS[cfg["hint"]][0] if hinted else "")
     if cfg["gasp"] in ("sized", "gridfit") and hinted and hs in ("medium", "full"):
-        if mode[-1:] != "n":
+        if mode[1:2] != mode[2:3]:
             add("system", f"gasp '{cfg['gasp']}' lacks symmetric smoothing: FreeType 2.15 runs the "
                           "static fonts' bytecode differently from ttfautohint's own gasp up to "
                           "about 20 px; 'smooth' or 'keep' leaves them as hinted")
         else:
-            add("system", f"gasp '{cfg['gasp']}': with natural stems ({mode}) FreeType 2.15 "
-                          "rendered Noto Sans the same as ttfautohint's own gasp")
+            add("system", f"gasp '{cfg['gasp']}': stem mode {mode} uses the same stems with and "
+                          "without symmetric smoothing, so FreeType 2.15 rendered Noto Sans the "
+                          "same as with ttfautohint's own gasp")
     elif cfg["gasp"] not in ("keep", ""):
         add("system", "gasp only matters to FreeType when the bytecode runs (hintmedium/full); "
                       "otherwise it is for Windows/Wine and validators")
