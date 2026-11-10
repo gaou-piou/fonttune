@@ -37,15 +37,20 @@ def probe(home=None):
             ff[f"{root.split('/')[0]}/{d.name}".lstrip(".")] = vals
     flags = sorted(p.name for p in (home / ".config").glob("*flags*.conf")
                    if CHROMIUM_FLAG in p.read_text(errors="ignore").split())
-    gtk = {}
+    gtk, ini_rendering = {}, ""
     for v in ("3", "4"):
         f = home / ".config" / f"gtk-{v}.0" / "settings.ini"
         if f.is_file():
-            m = re.search(r"^gtk-hint-font-metrics\s*=\s*(\w+)", f.read_text(), re.M)
+            txt = f.read_text(errors="ignore")
+            m = re.search(r"^gtk-hint-font-metrics\s*=\s*(\w+)", txt, re.M)
             gtk[f"gtk-{v}.0"] = m.group(1) if m else None
+            m = re.search(r"^gtk-font-rendering\s*=\s*(\w+)", txt, re.M)
+            if v == "4" and m:
+                ini_rendering = m.group(1).lower()
     # GTK4 reads gtk-hint-font-metrics and the hint style only under 'manual'
     # (gtkwidget.c, update_pango_context); 'automatic' forces slight, metrics off.
-    rendering = _gsettings("font-rendering").strip("'")
+    # GNOME's key wins; without it settings.ini, then GTK's default (automatic).
+    rendering = _gsettings("font-rendering").strip("'") or ini_rendering or "automatic"
     return {"firefox": ff, "chromium_flag_files": flags, "gtk": gtk, "rendering": rendering}
 
 
@@ -79,13 +84,17 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     out = []
     add = lambda where, text: out.append((where, text))  # noqa: E731
     grid = _on(cfg["pixel_grid"])
+    rendering = st.get("rendering") or "automatic"
+    manual = rendering == "manual"
     if _on(cfg["hint"]):
         if hs in ("slight", "none"):
             add("system", f"hint is on but the desktop uses '{hs}': FreeType ignores the bytecode. "
                           "Enable it for these fonts: sudo ln -s "
                           "/usr/share/fontconfig/conf.avail/80-<package>.conf /etc/fonts/conf.d/ "
                           "(the package ships it when hint is on)")
-        if st.get("rendering") == "manual":
+        if manual and hs in ("medium", "full"):
+            add("system", f"GTK4 font-rendering is manual and font-hinting {hs}: GTK4 runs the bytecode")
+        elif manual:
             add("system", "GTK4 font-rendering is already manual: it follows font-hinting "
                           "(set medium for the bytecode)")
         else:
@@ -110,23 +119,22 @@ def advice(cfg, hs=None, has_trak=True, state=None):
         add("system", f"pixel grid is tuned for {p} ppem: set the UI font to that size "
                       "(pt = ppem x 0.75), text-scaling-factor 1.0, and no fractional monitor scale")
     want_metrics = "true" if grid else "false"
-    manual = st.get("rendering", "manual") in ("manual", "")
+    if st["gtk"].get("gtk-3.0") is not None:
+        add("system", "gtk-3.0/settings.ini gtk-hint-font-metrics does nothing: GTK3 has "
+                      "no such setting (Pango rounds GTK3 glyph positions to whole pixels anyway)")
+    if not manual:
+        if grid:
+            how = ("" if _on(cfg["hint"]) else
+                   " (gsettings set org.gnome.desktop.interface font-rendering manual)")
+            add("system", f"GTK4 font-rendering is {rendering}: it ignores gtk-hint-font-metrics "
+                          f"and keeps positions fractional. The grid needs manual{how} and "
+                          "gtk-4.0/settings.ini gtk-hint-font-metrics=true")
+        else:
+            add("system", f"GTK4 font-rendering is {rendering}: hint metrics are off whatever "
+                          "settings.ini says, which is what you want")
     for name, cur in st["gtk"].items():
         have = cur or "unset"
-        if name == "gtk-3.0":
-            if cur is not None:
-                add("system", "gtk-3.0/settings.ini gtk-hint-font-metrics does nothing: GTK3 has "
-                              "no such setting (Pango rounds GTK3 glyph positions to whole pixels anyway)")
-            continue
-        if not manual:
-            if grid:
-                add("system", f"GTK4 font-rendering is '{st['rendering']}': it ignores "
-                              "gtk-hint-font-metrics (positions stay fractional). For the grid: "
-                              "gsettings set org.gnome.desktop.interface font-rendering manual, "
-                              "and gtk-4.0/settings.ini gtk-hint-font-metrics=true")
-            else:
-                add("system", f"GTK4 font-rendering is '{st['rendering']}': hint metrics are off "
-                              "there whatever settings.ini says, which is what you want")
+        if name == "gtk-3.0" or not manual:
             continue
         if cur != want_metrics:
             add("system", f"{name}/settings.ini gtk-hint-font-metrics: now {have}, set "

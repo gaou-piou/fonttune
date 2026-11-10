@@ -99,7 +99,8 @@ def test_advice_text():
     sys.path.insert(0, str(BIN.parent.parent))
     from fonttune import advice, cli
     st = {"firefox": {"mozilla/x.default": {"enabled": "true"}},
-          "chromium_flag_files": ["brave-flags.conf"], "gtk": {"gtk-4.0": "false"}}
+          "chromium_flag_files": ["brave-flags.conf"], "gtk": {"gtk-4.0": "false"},
+          "rendering": "manual"}
     cfg = dict(cli.DEFAULTS, pixel_grid="14", hint="balanced")
     txt = advice.render(cfg, hs="slight", state=st)
     assert "force-enabled = true already set" in txt and "ignores the bytecode" in txt
@@ -118,7 +119,26 @@ def test_advice_text():
     assert "which is what you want" in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="balanced"), hs="medium",
                         state=dict(st, rendering="manual"))
-    assert "already manual" in txt and "hard-codes" not in txt
+    assert "GTK4 runs the bytecode" in txt and "hard-codes" not in txt
+    # unknown rendering = GTK's default, automatic; the warning needs no settings.ini
+    txt = advice.render(dict(cli.DEFAULTS, pixel_grid="16"), hs="slight",
+                        state=dict(st, rendering="", gtk={}))
+    assert "font-rendering is automatic" in txt and "already right" not in txt
+    txt = advice.render(dict(cli.DEFAULTS, pixel_grid="16", hint="balanced"), hs="slight",
+                        state=dict(auto, gtk={}))
+    assert txt.count("font-rendering manual") == 1
+
+
+def test_probe_reads_gtk4_rendering(tmp_path, monkeypatch):
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import advice
+    d = tmp_path / ".config" / "gtk-4.0"
+    d.mkdir(parents=True)
+    (d / "settings.ini").write_text("[Settings]\ngtk-font-rendering=manual\n")
+    monkeypatch.setattr(advice, "_gsettings", lambda k: "")
+    assert advice.probe(tmp_path)["rendering"] == "manual"
+    (d / "settings.ini").write_text("[Settings]\n")
+    assert advice.probe(tmp_path)["rendering"] == "automatic"
 
 
 def test_statics_help_and_fit_weight_dispatch():
