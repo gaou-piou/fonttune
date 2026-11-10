@@ -196,7 +196,7 @@ def advice(cfg, hs=None, has_trak=True, state=None):
                           "about 20 px; 'smooth' or 'keep' leaves them as hinted")
         else:
             add("system", f"gasp '{cfg['gasp']}': with natural stems ({mode}) FreeType 2.15 "
-                          "renders the same as with ttfautohint's own gasp")
+                          "rendered Noto Sans the same as ttfautohint's own gasp")
     elif cfg["gasp"] not in ("keep", ""):
         add("system", "gasp only matters to FreeType when the bytecode runs (hintmedium/full); "
                       "otherwise it is for Windows/Wine and validators")

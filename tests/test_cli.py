@@ -126,6 +126,8 @@ def test_advice_text():
     assert "lacks symmetric smoothing" not in txt and "natural stems (nnn)" in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="natural", hint_mode="qsq", gasp="sized"), hs="full", state=st)
     assert "lacks symmetric smoothing" in txt
+    txt = advice.render(dict(cli.DEFAULTS, hint="balanced", hint_mode="qsn", gasp="sized"), hs="full", state=st)
+    assert "natural stems (qsn)" in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="", gasp="sized"), hs="full", state=st)
     assert "lacks symmetric smoothing" not in txt and "gasp only matters" in txt
     txt = advice.render(dict(cli.DEFAULTS, gasp="smooth"), hs="slight", state=st)
