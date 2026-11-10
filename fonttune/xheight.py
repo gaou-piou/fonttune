@@ -85,6 +85,8 @@ def main(argv=None):
     scale = text_scale()
     now = auto_ppem()
     sizes = [round(p * 96 / 72 * scale, 2) for p in pts]
+    if not all(1 <= s < 10000 for s in sizes):
+        ap.error("--pt sizes must come to 1 to 9999 pixels at this text scale")
     print(f"text-scaling-factor {scale:g}, UI font now {now:g} ppem; mode {a.mode}\n")
     measured = 0
     with Renderer() as r:

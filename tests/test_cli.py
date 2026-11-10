@@ -487,7 +487,7 @@ def test_xheight_snaps_under_hintslight(tmp_path):
     env = desktop(tmp_path)                                  # scale 1: 12 pt = 16 ppem
     r = run("xheight", "--pt", "11,12", font, env=env)
     assert r.returncode == 0 and "clean sizes:" in r.stdout and "+3.0%" in r.stdout
-    for args in (["--pt", "x"], ["--pt", "nan"], ["--pt", "inf"], ["--pt", ""], ["--tolerance", "nan"]):
+    for args in (["--pt", "x"], ["--pt", "nan"], ["--pt", "inf"], ["--pt", ""], ["--pt", "0.5,12"], ["--pt", "8000"], ["--tolerance", "nan"]):
         r = run("xheight", *args, font, env=env)
         assert r.returncode == 2 and "Traceback" not in r.stderr, args
     junk = tmp_path / "junk.ttf"
