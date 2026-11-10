@@ -133,15 +133,22 @@ def advice(cfg, hs=None, has_trak=True, state=None):
         else:
             add("system", f"GTK4 font-rendering is {rendering}: hint metrics are off whatever "
                           "settings.ini says, which is what you want")
-    for name, cur in st["gtk"].items():
-        have = cur or "unset"
-        if name == "gtk-3.0" or not manual:
-            continue
-        if cur != want_metrics:
-            add("system", f"{name}/settings.ini gtk-hint-font-metrics: now {have}, set "
-                          f"{want_metrics} (import-gsettings.sh does it)")
+    if manual:
+        cur = st["gtk"].get("gtk-4.0", "no file")
+        line = f"[Settings] gtk-hint-font-metrics={want_metrics}"
+        if cur == "no file":
+            # GTK4 defaults to true (gtksettings.c), which only the grid wants
+            if not grid:
+                add("system", "~/.config/gtk-4.0/settings.ini does not exist, so GTK4 hints the "
+                              f"metrics (its default): create it with {line}")
+            else:
+                add("system", "gtk-hint-font-metrics: GTK4's default (true) is already right")
+        elif (cur or "true") != want_metrics:
+            add("system", f"gtk-4.0/settings.ini gtk-hint-font-metrics: now {cur or 'unset (true)'}, "
+                          f"set {want_metrics} ({line})")
         else:
-            add("system", f"{name}/settings.ini gtk-hint-font-metrics = {cur}: already right")
+            add("system", f"gtk-4.0/settings.ini gtk-hint-font-metrics = {cur or 'unset (true)'}: "
+                          "already right")
     ffs = st["firefox"]
     for prof, v in ffs.items():
         dis, en = v.get("disabled"), v.get("enabled")

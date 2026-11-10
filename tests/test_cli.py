@@ -153,6 +153,13 @@ def test_advice_text():
     txt = advice.render(dict(cli.DEFAULTS, pixel_grid="16", hint="balanced"), hs="slight",
                         state=dict(auto, gtk={}))
     assert txt.count("font-rendering manual") == 1
+    # manual rendering without gtk-4.0/settings.ini: GTK4's default is true
+    txt = advice.render(dict(cli.DEFAULTS), hs="slight", state=dict(st, gtk={}))
+    assert "does not exist" in txt and "gtk-hint-font-metrics=false" in txt
+    txt = advice.render(dict(cli.DEFAULTS, pixel_grid="16"), hs="slight", state=dict(st, gtk={}))
+    assert "does not exist" not in txt and "default (true) is already right" in txt
+    txt = advice.render(dict(cli.DEFAULTS), hs="slight", state=dict(st, gtk={"gtk-4.0": None}))
+    assert "now unset (true), set false" in txt
 
 
 def test_probe_reads_gtk4_rendering(tmp_path, monkeypatch):
