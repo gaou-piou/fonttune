@@ -74,7 +74,8 @@ lowercase/capital ratio both stay within `--tolerance` (1.5%) are listed as
 clean; pick the UI font size from them. Variable fonts with an `opsz` axis
 are measured at opsz = the size in points, as Pango draws them. `--mode full`
 reads the font's own bytecode (hintmedium/hintfull); fonts without one are
-skipped there, FreeType autohints them anyway.
+skipped there, FreeType autohints them anyway. Exit status 1 when no font
+could be measured, 2 on bad options or unreadable files.
 
 ## Checking built fonts: `check`
 

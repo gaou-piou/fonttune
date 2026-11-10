@@ -21,6 +21,7 @@ drawn under hintslight are affected (GTK4 with hinting none, and Chromium,
 are not), and every autofitted/CFF font on the system gets the same curve.
 """
 import argparse
+import math
 import os
 import sys
 
@@ -148,8 +149,12 @@ def main(argv=None):
     ap.add_argument("--ink", type=float, default=2.5, help="ink gain at --ppem, percent (default 2.5)")
     ap.add_argument("--quiet", action="store_true", help="print only the FREETYPE_PROPERTIES value")
     a = ap.parse_args(argv)
-    if (a.ppem is not None and a.ppem <= 0) or (a.zero_at is not None and a.zero_at <= 0):
-        ap.error("--ppem and --zero-at must be positive")
+    if any(v is not None and not (math.isfinite(v) and v > 0) for v in (a.ppem, a.zero_at)):
+        ap.error("--ppem and --zero-at must be positive numbers")
+    with Renderer() as r:
+        bad = [f"{f} ({why})" for f in a.fonts if (why := r.unreadable(f))]
+    if bad:
+        ap.error(f"cannot read {', '.join(bad)}")
     ppem = a.ppem or auto_ppem()
     zero = a.zero_at or 2 * ppem
     if zero <= ppem:

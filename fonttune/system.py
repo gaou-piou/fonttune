@@ -1,4 +1,5 @@
 """Read the desktop settings that decide what `auto` means."""
+import math
 import re
 import subprocess
 
@@ -31,9 +32,10 @@ def _font_name_pt():
 def text_scale():
     """GNOME text-scaling-factor, 1.0 when it cannot be read."""
     try:
-        return float(_gsettings("text-scaling-factor"))
+        v = float(_gsettings("text-scaling-factor"))
     except ValueError:
         return 1.0
+    return v if math.isfinite(v) and v > 0 else 1.0
 
 
 def font_pt():

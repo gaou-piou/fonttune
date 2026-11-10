@@ -116,6 +116,16 @@ class Renderer:
         finally:
             self.lib.FT_Done_Face(face)
 
+    def unreadable(self, font):
+        """-> why FreeType cannot open font (face 0 of a collection), or None."""
+        if not os.path.isfile(font):
+            return "not a file"
+        face = FT_Face()
+        if err := self.lib.FT_New_Face(self.handle, os.fsencode(font), 0, ctypes.byref(face)):
+            return f"FreeType error {err}"
+        self.lib.FT_Done_Face(face)
+        return None
+
     def extent(self, font, ppem, char, mode="slight", axes=None):
         """(top, bottom) of char's hinted outline at ppem, in px from the baseline."""
         face = FT_Face()

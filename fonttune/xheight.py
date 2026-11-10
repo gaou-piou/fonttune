@@ -26,12 +26,12 @@ DEFAULT_PT = [9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14]
 
 
 def has_opsz(font):
-    with TTFont(font, lazy=True) as t:
+    with TTFont(font, lazy=True, fontNumber=0) as t:   # face 0, like FreeType
         return "fvar" in t and any(a.axisTag == "opsz" for a in t["fvar"].axes)
 
 
 def has_bytecode(font):
-    with TTFont(font, lazy=True) as t:
+    with TTFont(font, lazy=True, fontNumber=0) as t:   # face 0, like FreeType
         return "fpgm" in t or "prep" in t
 
 
@@ -71,17 +71,22 @@ def main(argv=None):
                     help="largest x-height and x/H change still clean, percent (default 1.5)")
     a = ap.parse_args(argv)
     try:
-        pts = [float(x) for x in a.pt.split(",")] if a.pt else DEFAULT_PT
+        pts = [float(x) for x in a.pt.split(",")] if a.pt is not None else DEFAULT_PT
     except ValueError:
         ap.error("--pt takes numbers separated by commas")
-    if any(p <= 0 for p in pts):
-        ap.error("--pt sizes must be positive")
-    if a.tolerance < 0:
-        ap.error("--tolerance must not be negative")
+    if not all(math.isfinite(p) and p > 0 for p in pts):
+        ap.error("--pt sizes must be positive numbers")
+    if not (math.isfinite(a.tolerance) and a.tolerance >= 0):
+        ap.error("--tolerance must be a number, not negative")
+    with Renderer() as r:
+        bad = [f"{f} ({why})" for f in a.fonts if (why := r.unreadable(f))]
+    if bad:
+        ap.error(f"cannot read {', '.join(bad)}")
     scale = text_scale()
     now = auto_ppem()
     sizes = [round(p * 96 / 72 * scale, 2) for p in pts]
     print(f"text-scaling-factor {scale:g}, UI font now {now:g} ppem; mode {a.mode}\n")
+    measured = 0
     with Renderer() as r:
         for f in a.fonts:
             print(os.path.basename(f) + (" (opsz = pt)" if has_opsz(f) else ""))
@@ -93,6 +98,7 @@ def main(argv=None):
             except ValueError as e:
                 print(f"  skipped: {e}\n")
                 continue
+            measured += 1
             print("      pt   ppem   x exact  x hinted  change   x/H")
             clean = []
             for pt, (p, ex, hx, dx, dr) in zip(pts, rows):
@@ -103,9 +109,10 @@ def main(argv=None):
                 ratio = "   n/a" if math.isnan(dr) else f"{dr * 100:+5.1f}%"
                 print(f"  {pt:6g} {p:6g}  {ex:8.2f}  {hx:8.2f}  {dx * 100:+5.1f}%  {ratio}{mark}")
             print(f"  clean sizes: {', '.join(clean) or 'none'}\n")
-    print("change: hinted against exact x-height; x/H: lowercase against capitals. "
-          "(n/a: no 'H'). Only text hinted this way is affected (GTK4 automatic = hintslight).")
-    return 0
+    print("change: hinted against exact x-height; x/H: lowercase against capitals (n/a: no 'H'). "
+          + ("Only text hinted this way is affected (GTK4 automatic = hintslight)."
+             if a.mode == "slight" else "Only text drawn with hintmedium/hintfull runs the bytecode."))
+    return 0 if measured else 1
 
 
 if __name__ == "__main__":

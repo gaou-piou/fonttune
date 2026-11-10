@@ -5,8 +5,20 @@ from pathlib import Path
 BIN = Path(__file__).resolve().parent.parent / "bin" / "fonttune"
 
 
-def run(*a):
-    return subprocess.run([sys.executable, str(BIN), *a], capture_output=True, text=True)
+def run(*a, env=None):
+    return subprocess.run([sys.executable, str(BIN), *a], capture_output=True, text=True, env=env)
+
+
+def desktop(tmp_path, font="Adwaita Sans 11", scale=1.0):
+    """Environment whose gsettings reports this interface font and text scale."""
+    import os
+    d = tmp_path / "gsettings-bin"
+    d.mkdir(exist_ok=True)
+    gs = d / "gsettings"
+    gs.write_text(f"#!/bin/sh\ncase \"$3\" in font-name) echo \"'{font}'\";; "
+                  f"text-scaling-factor) echo {scale};; esac\n")
+    gs.chmod(0o755)
+    return {**os.environ, "PATH": str(d)}
 
 
 def test_steps_listed():
@@ -358,13 +370,19 @@ def test_darken_curve_hits_target_and_fades_out():
     assert r.version() != "" and r.ink(font, 16) > 0
 
 
-def test_darken_cli():
+def test_darken_cli(tmp_path):
     import pytest
     font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
     if not Path(font).is_file():
         pytest.skip("needs Adwaita Sans")
     r = run("darken", "--ppem", "16", "--quiet", font)
     assert r.returncode == 0 and "autofitter:darkening-parameters=" in r.stdout
+    junk = tmp_path / "junk.ttf"
+    junk.write_bytes(b"not a font")
+    for args in (["--ppem", "nan", font], ["--zero-at", "inf", font], [str(tmp_path / "no.ttf")],
+                 ["--quiet", "--ppem", "16", font, str(junk)]):
+        r = run("darken", *args)
+        assert r.returncode == 2 and "error:" in r.stderr and "Traceback" not in r.stderr, args
 
 
 def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
@@ -406,7 +424,7 @@ def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
         r.close()
 
 
-def test_xheight_snaps_under_hintslight():
+def test_xheight_snaps_under_hintslight(tmp_path):
     import pytest
     font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
     if not Path(font).is_file():
@@ -420,11 +438,24 @@ def test_xheight_snaps_under_hintslight():
     # x-height 1118/2048 em: 8.73 px at 16 ppem -> 9, 7.28 px at 13.33 -> 7
     assert [round(r[1], 2) for r in rows][1:3] == [7.28, 8.73]
     assert [r[2] for r in rows][1:3] == [7.0, 9.0]
-    r = run("xheight", "--pt", "11,12", font)
+    # opsz = pt without text scaling: 30 ppem at scale 1.25 is 18 pt (opsz 14-32 here)
+    from fonttune.ftrender import Renderer
+    [(_, exact, *_)] = xheight.table(font, [30], scale=1.25)
+    with Renderer() as rr:
+        at = {o: rr.extent(font, 30, "x", "none", {"opsz": o})[0] for o in (18, 22.5, 30)}
+    assert exact == at[18] and len(set(at.values())) == 3
+    env = desktop(tmp_path)                                  # scale 1: 12 pt = 16 ppem
+    r = run("xheight", "--pt", "11,12", font, env=env)
     assert r.returncode == 0 and "clean sizes:" in r.stdout and "+3.0%" in r.stdout
-    assert run("xheight", "--pt", "x", font).returncode == 2
-    r = run("xheight", "--mode", "full", "--pt", "12", font)       # Adwaita Sans has no fpgm
-    assert r.returncode == 0 and "no bytecode" in r.stdout
+    for args in (["--pt", "x"], ["--pt", "nan"], ["--pt", ""], ["--tolerance", "nan"]):
+        r = run("xheight", *args, font, env=env)
+        assert r.returncode == 2 and "Traceback" not in r.stderr, args
+    junk = tmp_path / "junk.ttf"
+    junk.write_bytes(b"not a font")
+    r = run("xheight", font, str(junk), env=env)
+    assert r.returncode == 2 and "cannot read" in r.stderr and "Traceback" not in r.stderr
+    r = run("xheight", "--mode", "full", "--pt", "12", font, env=env)   # Adwaita Sans: no fpgm
+    assert r.returncode == 1 and "no bytecode" in r.stdout and "hintmedium" in r.stdout
 
 
 
