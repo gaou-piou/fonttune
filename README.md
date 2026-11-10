@@ -76,6 +76,25 @@ are measured at opsz = the size in points, as Pango draws them. `--mode full`
 reads the font's own bytecode (hintmedium/hintfull); fonts without one are
 skipped there, FreeType autohints them anyway.
 
+## Checking built fonts: `check`
+
+`fonttune check [--fontbakery] FONT [FONT...]` looks for what measurably
+changes rendering on this desktop:
+
+- `overlap`: glyphs flagged OVERLAP_SIMPLE/COMPOUND. FreeType renders them
+  with 4x4 oversampling; on Adwaita Sans the flag alone changes 30-42% of
+  the pixels at 13-20 px (fontTools' instancer sets it on every glyph unless
+  told to remove the overlaps, as `statics` does).
+- `vf-hints`: a variable font with bytecode. The hints fit the default
+  instance; under hintmedium/full the other weights distort.
+- `gasp`: a hinted font whose gasp leaves symmetric smoothing off. FreeType
+  2.15 runs ttfautohint's bytecode differently up to about 20 px, except with
+  natural stems (which the font does not record).
+- `names`: no family name.
+
+Exit status 1 when anything is found. `--fontbakery` also runs
+`fontbakery check-universal` (not a dependency: `pip install fontbakery`).
+
 ## Variable fonts: `statics` and `fit-weight`
 
 `fonttune statics -o OUT --family NAME [--suffix S] [--weights "300 400 700"]

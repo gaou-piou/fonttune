@@ -415,3 +415,59 @@ def test_xheight_snaps_under_hintslight():
     r = run("xheight", "--mode", "full", "--pt", "12", font)       # Adwaita Sans has no fpgm
     assert r.returncode == 0 and "no bytecode" in r.stdout
 
+
+
+def test_check_flags_measured_problems(tmp_path):
+    """check: overlap flags, hinted VF, gasp without symmetric smoothing; a clean
+    static passes. The overlap flag alone must also change the rendering."""
+    import shutil
+    import pytest
+    from fontTools.ttLib import TTFont, newTable
+    from fontTools.varLib.instancer import OverlapMode, instantiateVariableFont
+    vf = Path("/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf")
+    if not vf.exists():
+        pytest.skip("needs Adwaita Sans")
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune.check import check
+    from fonttune.ftrender import Renderer
+    clean, flagged = tmp_path / "clean.ttf", tmp_path / "flagged.ttf"
+    instantiateVariableFont(TTFont(vf), {"wght": 400, "opsz": 14},
+                            overlap=OverlapMode.REMOVE).save(clean)
+    instantiateVariableFont(TTFont(vf), {"wght": 400, "opsz": 14},
+                            overlap=OverlapMode.KEEP_AND_SET_FLAGS).save(flagged)
+    assert check(str(clean)) == []
+    assert [c for c, _ in check(str(flagged))] == ["overlap"]
+    # same outlines, only the flag: FreeType's oversampling changes pixels
+    only_flag = tmp_path / "onlyflag.ttf"
+    f = TTFont(clean)
+    for n in f.getGlyphOrder():
+        g = f["glyf"][n]
+        if not g.isComposite() and g.numberOfContours > 0:
+            g.flags[0] |= 0x40
+    f.save(only_flag)
+    with Renderer() as r:
+        a = [d for *_, d in r.glyphs(str(clean), 16)]
+        b = [d for *_, d in r.glyphs(str(only_flag), 16)]
+    assert a != b
+    # hinted VF and gasp without symmetric smoothing
+    hvf = tmp_path / "hvf.ttf"
+    t = TTFont(vf)
+    t["prep"] = newTable("prep")
+    from fontTools.ttLib.tables import ttProgram
+    t["prep"].program = ttProgram.Program()
+    t["prep"].program.fromBytecode(b"")
+    t["gasp"] = newTable("gasp")
+    t["gasp"].version, t["gasp"].gaspRange = 0, {8: 2, 16: 1, 0xFFFF: 3}
+    t.save(hvf)
+    kinds = [c for c, _ in check(str(hvf))]
+    assert "vf-hints" in kinds and "gasp" in kinds
+    msg = dict(check(str(hvf)))["gasp"]
+    assert "<= 8 ppem" in msg and "the rest" in msg
+    # CLI: exit status and usage errors
+    assert run("check", str(clean)).returncode == 0
+    r = run("check", str(clean), str(flagged))
+    assert r.returncode == 1 and "[overlap]" in r.stdout and "clean.ttf: ok" in r.stdout
+    assert run("check", str(tmp_path / "missing.ttf")).returncode == 2
+    if not shutil.which("fontbakery"):
+        r = run("check", "--fontbakery", str(clean))
+        assert r.returncode == 2 and "not installed" in r.stderr
