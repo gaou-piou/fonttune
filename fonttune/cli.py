@@ -408,13 +408,17 @@ def main(argv=None):
     if argv and argv[0] == "darken":
         from .darken import main as darken
         return darken(argv[1:])
+    if argv and argv[0] == "xheight":
+        from .xheight import main as xheight
+        return xheight(argv[1:])
     ap = argparse.ArgumentParser(prog="fonttune")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("steps", help="list the pipeline steps in order")
     for name, hlp in (("statics", "cut static instances out of variable fonts (RIBBI names)"),
                       ("fit-weight", "find the Regular wght whose bars land on whole pixels"),
-                      ("darken", "fit a FREETYPE_PROPERTIES stem-darkening curve to a font")):
+                      ("darken", "fit a FREETYPE_PROPERTIES stem-darkening curve to a font"),
+                      ("xheight", "which UI sizes keep the font's x-height under hinting")):
         sub.add_parser(name, help=hlp, add_help=False)
     d = sub.add_parser("dev", help="set the local tree (default: this one, uncommitted edits included) "
                        "the PKGBUILDs build with under FONTTUNE_DEV=true")

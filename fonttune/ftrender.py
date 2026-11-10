@@ -61,6 +61,7 @@ def _lib():
     lib.FT_Get_Char_Index.argtypes = [FT_Face, ctypes.c_ulong]
     lib.FT_Get_Char_Index.restype = ctypes.c_uint
     lib.FT_Load_Glyph.argtypes = [FT_Face, ctypes.c_uint, ctypes.c_int32]
+    lib.FT_Set_Var_Design_Coordinates.argtypes = [FT_Face, ctypes.c_uint, ctypes.POINTER(ctypes.c_long)]
     lib.FT_Done_Face.argtypes = [FT_Face]
     lib.FT_Done_FreeType.argtypes = [FT_Library]
     return lib
@@ -78,14 +79,17 @@ class Renderer:
         self.lib.FT_Library_Version(self.handle, *map(ctypes.byref, v))
         return ".".join(str(x.value) for x in v)
 
-    def glyphs(self, font, ppem, text=TEXT, mode="slight"):
+    def glyphs(self, font, ppem, text=TEXT, mode="slight", axes=None):
         """Yield (char, rows, width, bytes) for each glyph of text at ppem.
 
-        Characters the font lacks are skipped (no .notdef boxes)."""
+        Characters the font lacks are skipped (no .notdef boxes). axes:
+        {tag: value} for a variable font; the others stay at their defaults."""
         face = FT_Face()
         if self.lib.FT_New_Face(self.handle, os.fsencode(font), 0, ctypes.byref(face)):
             raise RuntimeError(f"cannot open {font}")
         try:
+            if axes:
+                self._set_axes(face, font, axes)
             self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72)
             for ch in text:
                 gid = self.lib.FT_Get_Char_Index(face, ord(ch))
@@ -102,9 +106,36 @@ class Renderer:
         finally:
             self.lib.FT_Done_Face(face)
 
-    def ink(self, font, ppem, text=TEXT, mode="slight"):
+    def extent(self, font, ppem, char, mode="slight"):
+        """(top, bottom) of char's hinted outline at ppem, in px from the baseline."""
+        face = FT_Face()
+        if self.lib.FT_New_Face(self.handle, os.fsencode(font), 0, ctypes.byref(face)):
+            raise RuntimeError(f"cannot open {font}")
+        try:
+            self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72)
+            gid = self.lib.FT_Get_Char_Index(face, ord(char))
+            if not gid or self.lib.FT_Load_Glyph(face, gid, MODES[mode] & ~LOAD_RENDER):
+                return None
+            o = face.contents.glyph.contents.outline
+            ys = [o.points[i].y for i in range(o.n_points)]
+            return (max(ys) / 64, min(ys) / 64) if ys else None
+        finally:
+            self.lib.FT_Done_Face(face)
+
+    def _set_axes(self, face, font, axes):
+        from fontTools.ttLib import TTFont
+        fvar = TTFont(font, lazy=True)["fvar"].axes
+        unknown = set(axes) - {a.axisTag for a in fvar}
+        if unknown:
+            raise ValueError(f"{font} has no axis {', '.join(sorted(unknown))}")
+        vals = [axes.get(a.axisTag, a.defaultValue) for a in fvar]
+        arr = (ctypes.c_long * len(vals))(*(round(v * 65536) for v in vals))
+        if self.lib.FT_Set_Var_Design_Coordinates(face, len(vals), arr):
+            raise RuntimeError(f"cannot set axes on {font}")
+
+    def ink(self, font, ppem, text=TEXT, mode="slight", axes=None):
         """Total coverage of text at ppem, in fully-black pixels."""
-        return sum(sum(d) for _, _, _, d in self.glyphs(font, ppem, text, mode)) / 255
+        return sum(sum(d) for _, _, _, d in self.glyphs(font, ppem, text, mode, axes)) / 255
 
     def close(self):
         if self.handle:

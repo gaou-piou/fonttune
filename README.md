@@ -62,6 +62,18 @@ written: put the line in `~/.config/environment.d/` yourself. The
 measurements use the system FreeType (`fonttune/ftrender.py`); freetype-py
 wheels bundle an older one.
 
+## UI size and x-height: `xheight`
+
+`fonttune xheight [--pt 9,10,11] [--mode slight|full] FONT [FONT...]` lists,
+for each size, the exact x-height in pixels, the x-height after hinting, and
+how much the lowercase changes against the capitals. Under hintslight the
+autofitter rounds the x-height to whole pixels and scales the lowercase with
+it, so the change depends on the size: Adwaita Sans is +3.0% at 12 pt, -0.2%
+at 11 pt and +7.5% at 11.5 pt. Sizes where the x-height and the
+lowercase/capital ratio both stay within `--tolerance` (1.5%) are listed as
+clean; pick the UI font size from them. `--mode full` reads the font's
+bytecode instead (hintmedium/hintfull).
+
 ## Variable fonts: `statics` and `fit-weight`
 
 `fonttune statics -o OUT --family NAME [--suffix S] [--weights "300 400 700"]

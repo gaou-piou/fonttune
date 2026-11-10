@@ -391,3 +391,22 @@ def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
             assert bitmaps(hinted, "full") != bitmaps(sized, "full")
     finally:
         r.close()
+
+
+def test_xheight_snaps_under_hintslight():
+    import pytest
+    font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
+    if not Path(font).is_file():
+        pytest.skip("needs Adwaita Sans")
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import xheight
+    rows = xheight.table(font, [12, 13.33, 16, 17.33])
+    for ppem, exact, hinted, dx, _ in rows:
+        assert hinted == round(hinted) and abs(hinted - exact) < 1   # the autofitter rounds it
+        assert abs(dx - (hinted / exact - 1)) < 1e-9
+    # x-height 1118/2048 em: 8.73 px at 16 ppem -> 9, 7.28 px at 13.33 -> 7
+    assert [round(r[1], 2) for r in rows][1:3] == [7.28, 8.73]
+    assert [r[2] for r in rows][1:3] == [7.0, 9.0]
+    r = run("xheight", "--pt", "11,12", font)
+    assert r.returncode == 0 and "clean sizes:" in r.stdout and "+3.0%" in r.stdout
+    assert run("xheight", "--pt", "x", font).returncode == 2

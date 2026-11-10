@@ -21,12 +21,15 @@ def auto_ppem():
     m = re.match(r"^'.* (\d+(?:\.\d+)?)'$", _gsettings("font-name"))
     if not m:
         return 16.0
-    t = _gsettings("text-scaling-factor")
+    return round(float(m.group(1)) * 96 / 72 * text_scale(), 4)
+
+
+def text_scale():
+    """GNOME text-scaling-factor, 1.0 when it cannot be read."""
     try:
-        t = float(t)
+        return float(_gsettings("text-scaling-factor"))
     except ValueError:
-        t = 1.0
-    return round(float(m.group(1)) * 96 / 72 * t, 4)
+        return 1.0
 
 
 def auto_pt():
