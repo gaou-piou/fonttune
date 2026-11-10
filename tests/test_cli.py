@@ -122,6 +122,8 @@ def test_advice_text():
     assert "GTK4 runs the bytecode" in txt and "hard-codes" not in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="balanced", gasp="sized"), hs="full", state=st)
     assert "lacks symmetric smoothing" in txt
+    txt = advice.render(dict(cli.DEFAULTS, hint="natural", gasp="sized"), hs="full", state=st)
+    assert "lacks symmetric smoothing" not in txt
     txt = advice.render(dict(cli.DEFAULTS, gasp="smooth"), hs="slight", state=st)
     assert "only matters to FreeType when the bytecode runs" in txt
     # unknown rendering = GTK's default, automatic; the warning needs no settings.ini
@@ -380,5 +382,7 @@ def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
             return [d for _, _, _, d in r.glyphs(str(f), 16, mode=mode)]
         assert bitmaps(plain, "slight") == bitmaps(hinted, "slight") == bitmaps(sized, "slight")
         assert bitmaps(plain, "full") != bitmaps(hinted, "full")      # the bytecode does run at full
+        if tuple(map(int, r.version().split("."))) >= (2, 15):       # 2.15: gasp reaches the bytecode
+            assert bitmaps(hinted, "full") != bitmaps(sized, "full")
     finally:
         r.close()

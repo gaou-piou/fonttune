@@ -182,9 +182,12 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     if cfg["feature_suffix"]:
         add("system", f"families are renamed with '{cfg['feature_suffix']}': choose "
                       "that name in GNOME Tweaks / settings and per-app font settings")
-    if cfg["gasp"] in ("sized", "gridfit") and _on(cfg["hint"]) and hs in ("medium", "full"):
-        add("system", f"gasp '{cfg['gasp']}' lacks symmetric smoothing: FreeType 2.15 runs the "
-                      "bytecode differently below 17 px than with ttfautohint's own gasp; "
+    # Measured on 2.15: balanced/sharp change 23-40% of pixels up to 20 px,
+    # natural/light (no x-height snapping) 0%; fonts hinted upstream may differ.
+    if (cfg["gasp"] in ("sized", "gridfit") and hs in ("medium", "full")
+            and cfg["hint"] not in ("natural", "light")):
+        add("system", f"gasp '{cfg['gasp']}' lacks symmetric smoothing: FreeType 2.15 can run the "
+                      "bytecode differently up to about 20 px than with ttfautohint's own gasp; "
                       "'smooth' or 'keep' leaves it as hinted")
     elif cfg["gasp"] not in ("keep", ""):
         add("system", "gasp only matters to FreeType when the bytecode runs (hintmedium/full); "
