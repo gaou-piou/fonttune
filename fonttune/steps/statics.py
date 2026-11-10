@@ -25,8 +25,9 @@ written here:
 
 --axis pins any other axis (opsz=14, wdth=75, FLAR=100, slnt=-10 ...); axes not
 given stay at their default. opsz=auto is the GNOME interface font size in
-points: Pango (1.56.2 and later) sets opsz to the point size when it draws a
-variable font, so statics cut there look like the VF does in the UI (Roboto
+points, without text-scaling-factor (GTK scales through the resolution):
+Pango (1.56.2 and later) sets opsz to the point size when it draws a variable
+font, outlines included, so statics cut there look like the VF does in the UI (Roboto
 Flex at 12 pt / 16 px: opsz 14 instead of 12 is 2.3% less ink, 1.2% narrower).
 A pin outside the axis range is clamped to it. A font counts as italic when slnt is pinned to a
 non-zero value or the input font is already italic (fsSelection / italicAngle).
@@ -55,7 +56,10 @@ FS_ITALIC, FS_BOLD, FS_REGULAR = 1 << 0, 1 << 5, 1 << 6
 
 
 def num(s):
-    v = float(s)
+    try:
+        v = float(s)
+    except ValueError:
+        sys.exit(f"statics: not a number: {s!r}")
     return int(v) if v.is_integer() else v
 
 
@@ -75,10 +79,13 @@ def cut_for(w, regular, scale):
 def ui_pt():
     """GNOME interface font size in points (fonttune.system; 12 when unreadable)."""
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    from fonttune.system import auto_pt
-    pt = auto_pt()
+    from fonttune.system import font_pt
+    pt = font_pt()
     print(f"statics: opsz auto: {pt:g} (interface font size in points)")
     return pt
+
+
+_CLAMP_NOTED = set()
 
 
 def make_static(path, outdir, family, suffix, weight, cut, pins):
@@ -89,9 +96,12 @@ def make_static(path, outdir, family, suffix, weight, cut, pins):
             sys.exit(f"statics: {path} has no {tag} axis (has {', '.join(axes)})")
     clamped = {t: min(max(v, axes[t].minValue), axes[t].maxValue) for t, v in pins.items()}
     for t in pins:
-        if clamped[t] != pins[t]:
+        if clamped[t] != pins[t] and (path, t) not in _CLAMP_NOTED:
+            _CLAMP_NOTED.add((path, t))
             print(f"statics: {t}={pins[t]:g} is outside {axes[t].minValue:g}-{axes[t].maxValue:g}, "
                   f"using {clamped[t]:g}")
+    if pins.get("slnt") and not clamped["slnt"]:
+        sys.exit(f"statics: slnt={pins['slnt']:g} clamps to 0, which would overwrite the upright")
     pins = clamped
     wax = axes.get("wght")
     if wax is None:
@@ -182,7 +192,7 @@ def main(argv=None):
         tag, _, val = item.partition("=")
         if not tag or not val:
             sys.exit(f"statics: --axis wants TAG=VALUE, got {item!r}")
-        pins[tag] = ui_pt() if (tag, val) == ("opsz", "auto") else num(val)
+        pins[tag] = ui_pt() if (tag, val.lower()) == ("opsz", "auto") else num(val)
     weights = [num(w) for w in a.weights.split()]
     for w in weights:
         if w not in WEIGHTS:

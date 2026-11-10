@@ -32,6 +32,17 @@ def text_scale():
         return 1.0
 
 
+def font_pt():
+    """GNOME interface font size in points, without text-scaling-factor (12 if unreadable).
+
+    GTK applies text-scaling-factor through the resolution, so Pango keeps this
+    size (and sets opsz to it): measured on Pango 1.58 at 120 dpi, a 12 pt
+    layout renders exactly as @opsz=12.
+    """
+    m = re.match(r"^'.* (\d+(?:\.\d+)?)'$", _gsettings("font-name"))
+    return float(m.group(1)) if m else 12.0
+
+
 def auto_pt():
     """GNOME interface font size (pt) x text-scaling-factor: the size body text is set at.
 
