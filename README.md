@@ -87,12 +87,15 @@ changes rendering on this desktop:
   told to remove the overlaps, as `statics` does).
 - `vf-hints`: a variable font with bytecode. The hints fit the default
   instance; under hintmedium/full the other weights distort.
-- `gasp`: a hinted font whose gasp leaves symmetric smoothing off. FreeType
-  2.15 runs ttfautohint's bytecode differently up to about 20 px, except with
-  natural stems (which the font does not record).
+- `gasp`: a ttfautohint font whose gasp leaves symmetric smoothing off in a
+  range that starts at or below 20 ppem. Under hintmedium/full FreeType 2.15
+  runs its bytecode differently up to about 20 px, except with natural stems
+  (which the font does not record). Other hinters were not measured, so
+  their fonts are not flagged.
 - `names`: no family name.
 
-Exit status 1 when anything is found. `--fontbakery` also runs
+Collections (`.ttc`) are checked font by font. Exit status 1 when anything
+is found, 2 when a file cannot be read. `--fontbakery` also runs
 `fontbakery check-universal` (not a dependency: `pip install fontbakery`).
 
 ## Variable fonts: `statics` and `fit-weight`
