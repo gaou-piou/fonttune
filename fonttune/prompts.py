@@ -244,9 +244,12 @@ def ask_config(cfg, facts, skip=()):
     if ask("gasp"):
         cfg["gasp"] = choice("gasp", (
             "gasp table: per-size rendering hints for the rasteriser"
-            "\n\nIt tells a renderer at which sizes to grid-fit and to anti-alias. "
-            "FreeType, and so GTK, Chromium and Firefox on Linux, ignores it: this matters "
-            "for Windows/macOS and for font validators (fontbakery wants it present)."), [
+            "\n\nIt tells a renderer at which sizes to grid-fit and to anti-alias. Under "
+            "hintslight (and with no hinting) FreeType ignores it. FreeType 2.15 passes its "
+            "symmetric-smoothing bit to the bytecode, so with hintmedium/hintfull 'sized' and "
+            "'gridfit' (which lack it) change ttfautohint's result below 17 px; 'smooth' "
+            "matches what ttfautohint writes. Otherwise it is for Windows and font "
+            "validators (fontbakery wants it present)."), [
             ("keep", "leave it as the font (or ttfautohint) wrote it"),
             ("smooth", "smooth and grid-fit at every size: the value Google Fonts uses"),
             ("sized", "Microsoft's old size-based scheme: no anti-aliasing from 9 to 16 px"),

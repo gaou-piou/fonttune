@@ -21,7 +21,9 @@ from freetype.ft_structs import FT_Face, FT_Library
 LOAD_RENDER = 0x4
 LOAD_NO_HINTING = 0x2
 TARGET_LIGHT = 1 << 16          # FT_LOAD_TARGET_(FT_RENDER_MODE_LIGHT)
-MODES = {"slight": LOAD_RENDER | TARGET_LIGHT, "none": LOAD_RENDER | LOAD_NO_HINTING}
+# slight = cairo hintslight; full = hintmedium/hintfull (the bytecode runs)
+MODES = {"slight": LOAD_RENDER | TARGET_LIGHT, "full": LOAD_RENDER,
+         "none": LOAD_RENDER | LOAD_NO_HINTING}
 
 TEXT = "Hamburgefonstiv quick jump ÄÖÜ äöü ίϊΐ αλφάβητο ελληνικά 0123"
 

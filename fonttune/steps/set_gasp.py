@@ -15,6 +15,12 @@ MODE:
   keep     leave the gasp table untouched (no-op; here for completeness)
 
 The font is edited in place. A gasp table is created if missing.
+
+FreeType ignores gasp under hintslight. Since 2.15 its v40 interpreter hands
+the symmetric-smoothing bit to the bytecode, so under hintmedium/hintfull
+'sized' and 'gridfit' (bit clear) render a ttfautohint font differently from
+its own gasp (0x000F) at 12-16 px: about 35-40% of the pixels move, by ~7%
+gray on average. 'smooth' is identical to ttfautohint's value.
 Reference: OpenType spec 'gasp' table; fontTools _g_a_s_p.
 """
 import sys

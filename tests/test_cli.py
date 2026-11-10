@@ -120,6 +120,10 @@ def test_advice_text():
     txt = advice.render(dict(cli.DEFAULTS, hint="balanced"), hs="medium",
                         state=dict(st, rendering="manual"))
     assert "GTK4 runs the bytecode" in txt and "hard-codes" not in txt
+    txt = advice.render(dict(cli.DEFAULTS, hint="balanced", gasp="sized"), hs="full", state=st)
+    assert "lacks symmetric smoothing" in txt
+    txt = advice.render(dict(cli.DEFAULTS, gasp="smooth"), hs="slight", state=st)
+    assert "only matters to FreeType when the bytecode runs" in txt
     # unknown rendering = GTK's default, automatic; the warning needs no settings.ini
     txt = advice.render(dict(cli.DEFAULTS, pixel_grid="16"), hs="slight",
                         state=dict(st, rendering="", gtk={}))
@@ -351,3 +355,30 @@ def test_darken_cli():
         pytest.skip("needs Adwaita Sans")
     r = run("darken", "--ppem", "16", "--quiet", font)
     assert r.returncode == 0 and "autofitter:darkening-parameters=" in r.stdout
+
+
+def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
+    """Measured on the system FreeType: ttfautohint and gasp change no pixel under hintslight."""
+    import shutil
+    import pytest
+    src = Path("/usr/share/fonts/noto/NotoSans-Regular.ttf")
+    if not src.is_file() or not shutil.which("ttfautohint"):
+        pytest.skip("needs Noto Sans and ttfautohint")
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune.ftrender import Renderer
+    plain, hinted, sized = (tmp_path / n for n in ("plain.ttf", "hinted.ttf", "sized.ttf"))
+    subprocess.run(["ttfautohint", "--dehint", str(src), str(plain)], check=True)
+    shutil.copy(plain, hinted)
+    steps = BIN.parent.parent / "fonttune" / "steps"
+    subprocess.run([sys.executable, "-I", str(steps / "hint.py"), "balanced", str(hinted)], check=True)
+    shutil.copy(hinted, sized)
+    subprocess.run([sys.executable, "-I", str(steps / "set_gasp.py"), "sized", str(sized)], check=True)
+    monkeypatch.setenv("FREETYPE_PROPERTIES", "truetype:interpreter-version=40")
+    r = Renderer()
+    try:
+        def bitmaps(f, mode):
+            return [d for _, _, _, d in r.glyphs(str(f), 16, mode=mode)]
+        assert bitmaps(plain, "slight") == bitmaps(hinted, "slight") == bitmaps(sized, "slight")
+        assert bitmaps(plain, "full") != bitmaps(hinted, "full")      # the bytecode does run at full
+    finally:
+        r.close()

@@ -182,8 +182,13 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     if cfg["feature_suffix"]:
         add("system", f"families are renamed with '{cfg['feature_suffix']}': choose "
                       "that name in GNOME Tweaks / settings and per-app font settings")
-    if cfg["gasp"] not in ("keep", ""):
-        add("system", "gasp is read by Windows/Wine only; FreeType ignores it")
+    if cfg["gasp"] in ("sized", "gridfit") and _on(cfg["hint"]) and hs in ("medium", "full"):
+        add("system", f"gasp '{cfg['gasp']}' lacks symmetric smoothing: FreeType 2.15 runs the "
+                      "bytecode differently below 17 px than with ttfautohint's own gasp; "
+                      "'smooth' or 'keep' leaves it as hinted")
+    elif cfg["gasp"] not in ("keep", ""):
+        add("system", "gasp only matters to FreeType when the bytecode runs (hintmedium/full); "
+                      "under hintslight it is for Windows/Wine and validators")
     add("system", "after installing: fc-cache -f, then restart the apps (and log out for GTK)")
     return out
 
