@@ -18,12 +18,14 @@ import sys
 
 from freetype.ft_structs import FT_Face, FT_Library
 
-LOAD_RENDER = 0x4
-LOAD_NO_HINTING = 0x2
-TARGET_LIGHT = 1 << 16          # FT_LOAD_TARGET_(FT_RENDER_MODE_LIGHT)
-# slight = cairo hintslight; full = hintmedium/hintfull (the bytecode runs)
-MODES = {"slight": LOAD_RENDER | TARGET_LIGHT, "full": LOAD_RENDER,
-         "none": LOAD_RENDER | LOAD_NO_HINTING}
+from freetype.ft_enums import (FT_LOAD_NO_BITMAP, FT_LOAD_NO_HINTING, FT_LOAD_RENDER,
+                               FT_LOAD_TARGET_LIGHT)
+
+# slight = cairo hintslight; full = hintmedium/hintfull (the bytecode runs).
+# Embedded bitmaps (EBDT, often 1-bit) are skipped: the measurements are of outlines.
+MODES = {"slight": FT_LOAD_RENDER | FT_LOAD_TARGET_LIGHT | FT_LOAD_NO_BITMAP,
+         "full": FT_LOAD_RENDER | FT_LOAD_NO_BITMAP,
+         "none": FT_LOAD_RENDER | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP}
 
 TEXT = "Hamburgefonstiv quick jump ÄÖÜ äöü ίϊΐ αλφάβητο ελληνικά 0123"
 
@@ -95,7 +97,7 @@ class Renderer:
         try:
             if axes:
                 self._set_axes(face, font, axes)
-            self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72)
+            self._size(face, font, ppem)
             for ch in text:
                 gid = self.lib.FT_Get_Char_Index(face, ord(ch))
                 if ch == " " or not gid or self.lib.FT_Load_Glyph(face, gid, MODES[mode]):
@@ -119,15 +121,19 @@ class Renderer:
         try:
             if axes:
                 self._set_axes(face, font, axes)
-            self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72)
+            self._size(face, font, ppem)
             gid = self.lib.FT_Get_Char_Index(face, ord(char))
-            if not gid or self.lib.FT_Load_Glyph(face, gid, MODES[mode] & ~LOAD_RENDER):
+            if not gid or self.lib.FT_Load_Glyph(face, gid, MODES[mode] & ~FT_LOAD_RENDER):
                 return None
             o = face.contents.glyph.contents.outline
             ys = [o.points[i].y for i in range(o.n_points)]
             return (max(ys) / 64, min(ys) / 64) if ys else None
         finally:
             self.lib.FT_Done_Face(face)
+
+    def _size(self, face, font, ppem):
+        if not 0 < ppem < 10000 or self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72):
+            raise ValueError(f"cannot set {font} to {ppem} ppem")
 
     def _set_axes(self, face, font, axes):
         from fontTools.ttLib import TTFont
