@@ -51,6 +51,21 @@ def test_font_pt_ignores_text_scaling(tmp_path, monkeypatch):
 
 def test_statics_bad_axis_value(tmp_path):
     step = BIN.parent.parent / "fonttune" / "steps" / "statics.py"
-    r = subprocess.run([sys.executable, "-I", str(step), "-o", str(tmp_path), "--family", "T",
-                        "--axis", "opsz=big", "x.ttf"], capture_output=True, text=True)
-    assert r.returncode != 0 and "not a number" in r.stderr and "Traceback" not in r.stderr
+    for v in ("big", "nan", "inf"):
+        r = subprocess.run([sys.executable, "-I", str(step), "-o", str(tmp_path), "--family", "T",
+                            "--axis", f"opsz={v}", "x.ttf"], capture_output=True, text=True)
+        assert r.returncode != 0 and "not a number" in r.stderr and "Traceback" not in r.stderr
+
+
+def test_statics_validates_pins_before_writing(tmp_path):
+    """A pin that fails on the second font stops before the first is written."""
+    vf = Path("/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf")     # no slnt axis
+    if not vf.is_file():
+        pytest.skip("needs Adwaita Sans")
+    step = BIN.parent.parent / "fonttune" / "steps" / "statics.py"
+    out = tmp_path / "out"
+    r = subprocess.run([sys.executable, "-I", str(step), "-o", str(out), "--family", "T",
+                        "--weights", "400", "--axis", "slnt=-10", str(vf)],
+                       capture_output=True, text=True)
+    assert r.returncode != 0 and "has no slnt axis" in r.stderr
+    assert not out.exists()

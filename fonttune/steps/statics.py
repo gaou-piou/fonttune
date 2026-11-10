@@ -59,6 +59,8 @@ def num(s):
     try:
         v = float(s)
     except ValueError:
+        v = math.nan
+    if not math.isfinite(v):
         sys.exit(f"statics: not a number: {s!r}")
     return int(v) if v.is_integer() else v
 
@@ -85,24 +87,34 @@ def ui_pt():
     return pt
 
 
-_CLAMP_NOTED = set()
+def clamp_pins(path, pins):
+    """Pins clamped to path's axis ranges (noted once); exits on a bad pin.
 
-
-def make_static(path, outdir, family, suffix, weight, cut, pins):
-    font = TTFont(path)
-    axes = {ax.axisTag: ax for ax in font["fvar"].axes}
+    Called for every font before anything is written."""
+    with TTFont(path, lazy=True) as font:
+        if "fvar" not in font:
+            sys.exit(f"statics: {path} is not a variable font")
+        axes = {ax.axisTag: (ax.minValue, ax.maxValue) for ax in font["fvar"].axes}
     for tag in pins:
         if tag not in axes:
             sys.exit(f"statics: {path} has no {tag} axis (has {', '.join(axes)})")
-    clamped = {t: min(max(v, axes[t].minValue), axes[t].maxValue) for t, v in pins.items()}
+    if "wght" not in axes:
+        sys.exit(f"statics: {path} has no wght axis")
+    clamped = {t: min(max(v, axes[t][0]), axes[t][1]) for t, v in pins.items()}
     for t in pins:
-        if clamped[t] != pins[t] and (path, t) not in _CLAMP_NOTED:
-            _CLAMP_NOTED.add((path, t))
-            print(f"statics: {t}={pins[t]:g} is outside {axes[t].minValue:g}-{axes[t].maxValue:g}, "
-                  f"using {clamped[t]:g}")
+        if clamped[t] != pins[t]:
+            print(f"statics: {t}={pins[t]:g} is outside {axes[t][0]:g}-{axes[t][1]:g} "
+                  f"in {os.path.basename(path)}, using {clamped[t]:g}")
     if pins.get("slnt") and not clamped["slnt"]:
-        sys.exit(f"statics: slnt={pins['slnt']:g} clamps to 0, which would overwrite the upright")
-    pins = clamped
+        sys.exit(f"statics: slnt={pins['slnt']:g} clamps to 0 in {path}, which would "
+                 "overwrite the upright")
+    return clamped
+
+
+def make_static(path, outdir, family, suffix, weight, cut, pins):
+    """pins: already clamped by clamp_pins()."""
+    font = TTFont(path)
+    axes = {ax.axisTag: ax for ax in font["fvar"].axes}
     wax = axes.get("wght")
     if wax is None:
         sys.exit(f"statics: {path} has no wght axis")
@@ -214,12 +226,13 @@ def main(argv=None):
                 sys.exit("statics: --regular-wght must be 100-900")
         if regular and 400 not in weights:
             weights = [400] + weights
+    per_font = {path: clamp_pins(path, pins) for path in a.fonts}
     os.makedirs(a.outdir, exist_ok=True)
     made = 0
     for path in a.fonts:
         for w in weights:
             if make_static(path, a.outdir, a.family, a.suffix, w,
-                           cut_for(w, regular, not a.no_scale), pins):
+                           cut_for(w, regular, not a.no_scale), per_font[path]):
                 made += 1
     if not made:
         sys.exit("statics: no instance produced")

@@ -80,10 +80,15 @@ class Renderer:
         return ".".join(str(x.value) for x in v)
 
     def glyphs(self, font, ppem, text=TEXT, mode="slight", axes=None):
-        """Yield (char, rows, width, bytes) for each glyph of text at ppem.
+        """-> [(char, rows, width, bytes)] for each glyph of text at ppem.
 
         Characters the font lacks are skipped (no .notdef boxes). axes:
-        {tag: value} for a variable font; the others stay at their defaults."""
+        {tag: value} for a variable font; the others stay at their defaults.
+        A list, not a generator: a face left open past close() would be freed
+        after its library (segfault)."""
+        return list(self._glyphs(font, ppem, text, mode, axes))
+
+    def _glyphs(self, font, ppem, text, mode, axes):
         face = FT_Face()
         if self.lib.FT_New_Face(self.handle, os.fsencode(font), 0, ctypes.byref(face)):
             raise RuntimeError(f"cannot open {font}")

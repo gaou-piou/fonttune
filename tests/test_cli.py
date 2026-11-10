@@ -446,9 +446,9 @@ def test_check_flags_measured_problems(tmp_path):
             g.flags[0] |= 0x40
     f.save(only_flag)
     with Renderer() as r:
-        a = [d for *_, d in r.glyphs(str(clean), 16)]
-        b = [d for *_, d in r.glyphs(str(only_flag), 16)]
-    assert a != b
+        a = b"".join(d for *_, d in r.glyphs(str(clean), 16))
+        b = b"".join(d for *_, d in r.glyphs(str(only_flag), 16))
+    assert len(a) == len(b) and sum(x != y for x, y in zip(a, b)) > 0.2 * len(a)   # measured 35%
     # hinted VF and gasp without symmetric smoothing
     hvf = tmp_path / "hvf.ttf"
     t = TTFont(vf)
@@ -456,18 +456,34 @@ def test_check_flags_measured_problems(tmp_path):
     from fontTools.ttLib.tables import ttProgram
     t["prep"].program = ttProgram.Program()
     t["prep"].program.fromBytecode(b"")
+    t["fpgm"] = newTable("fpgm")
+    t["fpgm"].program = ttProgram.Program()
+    t["fpgm"].program.fromBytecode(b"")
     t["gasp"] = newTable("gasp")
     t["gasp"].version, t["gasp"].gaspRange = 0, {8: 2, 16: 1, 0xFFFF: 3}
     t.save(hvf)
-    kinds = [c for c, _ in check(str(hvf))]
-    assert "vf-hints" in kinds and "gasp" in kinds
+    assert [c for c, _ in check(str(hvf))] == ["vf-hints"]     # gasp: not a ttfautohint font
+    t["name"].setName("Version 1.0; ttfautohint (v1.8.4)", 5, 3, 1, 0x409)
+    t.save(hvf)
     msg = dict(check(str(hvf)))["gasp"]
-    assert "<= 8 ppem" in msg and "the rest" in msg
+    assert "0-8 ppem, 9-16 ppem, 17+ ppem" in msg
+    t["gasp"].version, t["gasp"].gaspRange = 1, {20: 0xF, 0xFFFF: 0x7}   # only above 20 px
+    t.save(hvf)
+    assert "gasp" not in dict(check(str(hvf)))
+    # blank typographic family falls back to nameID 1
+    t["name"].setName(" ", 16, 3, 1, 0x409)
+    t.save(hvf)
+    assert "names" not in dict(check(str(hvf)))
+
     # CLI: exit status and usage errors
     assert run("check", str(clean)).returncode == 0
     r = run("check", str(clean), str(flagged))
     assert r.returncode == 1 and "[overlap]" in r.stdout and "clean.ttf: ok" in r.stdout
     assert run("check", str(tmp_path / "missing.ttf")).returncode == 2
+    broken = tmp_path / "broken.ttf"
+    broken.write_bytes(b"\0\1\0\0garbage")
+    r = run("check", str(broken), str(clean))
+    assert r.returncode == 2 and "broken.ttf: cannot read (" in r.stdout and "clean.ttf: ok" in r.stdout
     if not shutil.which("fontbakery"):
         r = run("check", "--fontbakery", str(clean))
         assert r.returncode == 2 and "not installed" in r.stderr

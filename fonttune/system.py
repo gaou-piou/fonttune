@@ -18,10 +18,14 @@ def auto_ppem():
     Monitor scale is ignored on purpose: it is 1.0 on the setups this was
     measured on. Falls back to 16 ppem when the size cannot be read.
     """
+    pt = _font_name_pt()
+    return 16.0 if pt is None else round(pt * 96 / 72 * text_scale(), 4)
+
+
+def _font_name_pt():
+    """Size in GNOME's font-name ('Inter 11' -> 11.0), None when unreadable."""
     m = re.match(r"^'.* (\d+(?:\.\d+)?)'$", _gsettings("font-name"))
-    if not m:
-        return 16.0
-    return round(float(m.group(1)) * 96 / 72 * text_scale(), 4)
+    return float(m.group(1)) if m else None
 
 
 def text_scale():
@@ -39,8 +43,8 @@ def font_pt():
     size (and sets opsz to it): measured on Pango 1.58 at 120 dpi, a 12 pt
     layout renders exactly as @opsz=12.
     """
-    m = re.match(r"^'.* (\d+(?:\.\d+)?)'$", _gsettings("font-name"))
-    return float(m.group(1)) if m else 12.0
+    pt = _font_name_pt()
+    return 12.0 if pt is None else pt
 
 
 def auto_pt():
