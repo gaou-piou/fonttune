@@ -2,10 +2,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 BIN = Path(__file__).resolve().parent.parent / "bin" / "fonttune"
 
 
 def run(*a, env=None):
+    """bin/fonttune without the caller's FONTTUNE_* answers or config directory."""
+    import os
+    if env is None:
+        env = {k: v for k, v in os.environ.items() if k != "XDG_CONFIG_HOME" and not
+               (k.startswith("FONTTUNE_") and k not in ("FONTTUNE_DEV", "FONTTUNE_LIBFREETYPE"))}
     return subprocess.run([sys.executable, str(BIN), *a], capture_output=True, text=True, env=env)
 
 
@@ -417,16 +424,17 @@ def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
             return [d for _, _, _, d in r.glyphs(str(f), 16, mode=mode)]
         assert bitmaps(plain, "slight") == bitmaps(hinted, "slight") == bitmaps(sized, "slight")
         assert bitmaps(plain, "full") != bitmaps(hinted, "full")      # the bytecode does run at full
-        if tuple(map(int, r.version().split("."))) >= (2, 15):       # 2.15: gasp reaches the bytecode
-            assert bitmaps(hinted, "full") != bitmaps(sized, "full")
-            # ...only when the 2nd and 3rd stem-mode letters differ: sharp (sss) is unchanged
-            sharp, sharp_sized = tmp_path / "sharp.ttf", tmp_path / "sharp-sized.ttf"
-            shutil.copy(plain, sharp)
-            subprocess.run([sys.executable, "-I", str(steps / "hint.py"), "sharp", str(sharp)], check=True)
-            shutil.copy(sharp, sharp_sized)
-            subprocess.run([sys.executable, "-I", str(steps / "set_gasp.py"), "sized", str(sharp_sized)],
-                           check=True)
-            assert bitmaps(sharp, "full") == bitmaps(sharp_sized, "full")
+        if tuple(map(int, r.version().split("."))) < (2, 15):
+            pytest.skip(f"FreeType {r.version()}: gasp reaches the bytecode from 2.15 on")
+        assert bitmaps(hinted, "full") != bitmaps(sized, "full")
+        # ...only when the 2nd and 3rd stem-mode letters differ: sharp (sss) is unchanged
+        sharp, sharp_sized = tmp_path / "sharp.ttf", tmp_path / "sharp-sized.ttf"
+        shutil.copy(plain, sharp)
+        subprocess.run([sys.executable, "-I", str(steps / "hint.py"), "sharp", str(sharp)], check=True)
+        shutil.copy(sharp, sharp_sized)
+        subprocess.run([sys.executable, "-I", str(steps / "set_gasp.py"), "sized", str(sharp_sized)],
+                       check=True)
+        assert bitmaps(sharp, "full") == bitmaps(sharp_sized, "full")
     finally:
         r.close()
 

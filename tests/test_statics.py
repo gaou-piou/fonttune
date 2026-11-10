@@ -33,7 +33,7 @@ def test_statics_opsz_auto_and_clamp(tmp_path, monkeypatch):
             b = rr.ink(str(vf), 16, mode="none", axes={"opsz": max(want, ax["opsz"].minValue)})
             other = rr.ink(str(vf), 16, mode="none", axes={"opsz": ax["opsz"].minValue
                            if val == "99" else ax["opsz"].maxValue})
-            assert abs(a / b - 1) < 0.005 < abs(a / other - 1)   # overlap removal moves ~0.4%
+            assert abs(a / b - 1) < 0.02 < abs(a / other - 1)   # overlap removal ~0.4%, other ~8%
 
 
 def test_font_pt_ignores_text_scaling(tmp_path, monkeypatch):

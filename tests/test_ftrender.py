@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip("freetype")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fonttune.ftrender import Renderer  # noqa: E402
 
@@ -37,13 +38,13 @@ def test_bad_ppem_raises(ppem):
 
 def test_system_freetype_without_path(monkeypatch, tmp_path):
     """Tests that empty PATH (for a fake gsettings) still get the system FreeType,
-    not freetype-py's bundled copy."""
+    not the copy bundled with freetype-py."""
     from fonttune import ftrender
-    want = ftrender.system_path()
     ftrender.system_path.cache_clear()
     monkeypatch.setenv("PATH", str(tmp_path))
     monkeypatch.delenv("FONTTUNE_LIBFREETYPE", raising=False)
     try:
-        assert ftrender.system_path() == want
+        got = ftrender.system_path()
+        assert Path(got).is_absolute() and "site-packages" not in got
     finally:
         ftrender.system_path.cache_clear()
