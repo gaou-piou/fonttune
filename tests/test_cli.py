@@ -2,18 +2,23 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 
 BIN = Path(__file__).resolve().parent.parent / "bin" / "fonttune"
 
 
-def run(*a, env=None):
-    """bin/fonttune without the caller's FONTTUNE_* answers or config directory."""
+def clean_env():
+    """os.environ without the caller's FONTTUNE_* answers or config directory."""
     import os
+    env = {k: v for k, v in os.environ.items() if not
+           (k.startswith("FONTTUNE_") and k not in ("FONTTUNE_DEV", "FONTTUNE_LIBFREETYPE"))}
+    env["XDG_CONFIG_HOME"] = _empty_config().name
+    return env
+
+
+def run(*a, env=None):
+    """bin/fonttune; env defaults to clean_env()."""
     if env is None:
-        env = {k: v for k, v in os.environ.items() if not
-               (k.startswith("FONTTUNE_") and k not in ("FONTTUNE_DEV", "FONTTUNE_LIBFREETYPE"))}
-        env["XDG_CONFIG_HOME"] = _empty_config().name
+        env = clean_env()
     return subprocess.run([sys.executable, str(BIN), *a], capture_output=True, text=True, env=env)
 
 
@@ -31,14 +36,13 @@ def _empty_config():
 
 def desktop(tmp_path, font="Adwaita Sans 11", scale=1.0):
     """Environment whose gsettings reports this interface font and text scale."""
-    import os
     d = tmp_path / "gsettings-bin"
     d.mkdir(exist_ok=True)
     gs = d / "gsettings"
     gs.write_text(f"#!/bin/sh\ncase \"$3\" in font-name) echo \"'{font}'\";; "
                   f"text-scaling-factor) echo {scale};; esac\n")
     gs.chmod(0o755)
-    return {**os.environ, "PATH": str(d)}
+    return {**clean_env(), "PATH": str(d)}
 
 
 def test_steps_listed():
@@ -58,8 +62,7 @@ def test_dry_run_plan():
 
 
 def test_config_saved_and_reused(tmp_path):
-    import os
-    env = {**os.environ, "XDG_CONFIG_HOME": str(tmp_path)}
+    env = {**clean_env(), "XDG_CONFIG_HOME": str(tmp_path)}
     r = subprocess.run([sys.executable, str(BIN), "run", "--gasp", "sized", "--save",
                         "--dry-run", "-o", str(tmp_path / "o"), str(BIN)],
                        capture_output=True, text=True, env=env)
@@ -78,9 +81,8 @@ def test_only_skip_and_unknown_step():
 
 
 def test_configure_writes_file_and_env_layer(tmp_path):
-    import os
     out = tmp_path / "c.toml"
-    env = {**os.environ, "FONTTUNE_OTF2TTF": "true", "FONTTUNE_TRAK": "13"}
+    env = {**clean_env(), "FONTTUNE_OTF2TTF": "true", "FONTTUNE_TRAK": "13"}
     r = subprocess.run([sys.executable, str(BIN), "configure", "--no-config", "--save-to", str(out),
                         str(BIN)], capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL)
     assert r.returncode == 0
@@ -243,8 +245,7 @@ def test_variable_fonts_skip_hint_and_grid(monkeypatch, capsys):
 
 
 def test_dev_toggle(tmp_path):
-    import os
-    env = {**os.environ, "XDG_CONFIG_HOME": str(tmp_path)}
+    env = {**clean_env(), "XDG_CONFIG_HOME": str(tmp_path)}
     r = lambda *a: subprocess.run([sys.executable, str(BIN), "dev", *a], capture_output=True,  # noqa: E731
                                   text=True, env=env)
     assert r().stdout.startswith("no local tree")
@@ -602,10 +603,9 @@ def test_check_flags_measured_problems(tmp_path):
     r = run("check", str(tmp_path / "pair.ttc"))
     assert r.returncode == 1 and "pair.ttc#0: ok" in r.stdout and "pair.ttc#1: 1 warning" in r.stdout
     # a failing fontbakery makes the status 1
-    import os
     fb = tmp_path / "fb" / "fontbakery"
     fb.parent.mkdir()
     fb.write_text("#!/bin/sh\nexit 3\n")
     fb.chmod(0o755)
-    r = run("check", "--fontbakery", str(clean), env={**os.environ, "PATH": str(fb.parent)})
+    r = run("check", "--fontbakery", str(clean), env={**clean_env(), "PATH": str(fb.parent)})
     assert r.returncode == 1 and "clean.ttf: ok" in r.stdout
