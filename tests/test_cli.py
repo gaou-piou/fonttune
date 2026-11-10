@@ -123,7 +123,11 @@ def test_advice_text():
     txt = advice.render(dict(cli.DEFAULTS, hint="balanced", gasp="sized"), hs="full", state=st)
     assert "lacks symmetric smoothing" in txt
     txt = advice.render(dict(cli.DEFAULTS, hint="natural", gasp="sized"), hs="full", state=st)
-    assert "lacks symmetric smoothing" not in txt
+    assert "lacks symmetric smoothing" not in txt and "natural stems (nnn)" in txt
+    txt = advice.render(dict(cli.DEFAULTS, hint="natural", hint_mode="qsq", gasp="sized"), hs="full", state=st)
+    assert "lacks symmetric smoothing" in txt
+    txt = advice.render(dict(cli.DEFAULTS, hint="", gasp="sized"), hs="full", state=st)
+    assert "lacks symmetric smoothing" not in txt and "gasp only matters" in txt
     txt = advice.render(dict(cli.DEFAULTS, gasp="smooth"), hs="slight", state=st)
     assert "only matters to FreeType when the bytecode runs" in txt
     # unknown rendering = GTK's default, automatic; the warning needs no settings.ini
@@ -360,7 +364,8 @@ def test_darken_cli():
 
 
 def test_hintslight_ignores_bytecode_and_gasp(tmp_path, monkeypatch):
-    """Measured on the system FreeType: ttfautohint and gasp change no pixel under hintslight."""
+    """System FreeType: ttfautohint and gasp change no pixel under hintslight; at full
+    the bytecode runs, and on 2.15 gasp 'sized' changes a balanced font."""
     import shutil
     import pytest
     src = Path("/usr/share/fonts/noto/NotoSans-Regular.ttf")

@@ -19,10 +19,10 @@ The font is edited in place. A gasp table is created if missing.
 FreeType ignores gasp under hintslight. Since 2.15 its v40 interpreter hands
 the symmetric-smoothing bit to the bytecode, so under hintmedium/hintfull
 'sized' and 'gridfit' (bit clear) render a ttfautohint font differently from
-its own gasp (0x000F) up to about 20 px with the balanced/sharp presets:
-23-40% of the pixels move, by ~7% gray on average. natural/light (x-height
-snapping off) and sizes from 21 px are unchanged. 'smooth' is identical to
-ttfautohint's value.
+its own gasp (0x000F) up to about 20 px when the stems are strong/quantized
+for DirectWrite (balanced, sharp): 23-55% of the pixels move. With natural
+stems (natural, light) and from 21 px nothing changes. 'smooth' is identical
+to ttfautohint's value.
 Reference: OpenType spec 'gasp' table; fontTools _g_a_s_p.
 """
 import sys

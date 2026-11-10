@@ -1,4 +1,5 @@
 """Summary of the chosen settings, plus what to set up around the fonts."""
+from .steps.hint import PRESETS
 from .system import _gsettings, auto_ppem, hintstyle
 
 LABELS = [
@@ -182,16 +183,23 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     if cfg["feature_suffix"]:
         add("system", f"families are renamed with '{cfg['feature_suffix']}': choose "
                       "that name in GNOME Tweaks / settings and per-app font settings")
-    # Measured on 2.15: balanced/sharp change 23-40% of pixels up to 20 px,
-    # natural/light (no x-height snapping) 0%; fonts hinted upstream may differ.
-    if (cfg["gasp"] in ("sized", "gridfit") and hs in ("medium", "full")
-            and cfg["hint"] not in ("natural", "light")):
-        add("system", f"gasp '{cfg['gasp']}' lacks symmetric smoothing: FreeType 2.15 can run the "
-                      "bytecode differently up to about 20 px than with ttfautohint's own gasp; "
-                      "'smooth' or 'keep' leaves it as hinted")
+    # Measured on 2.15 (Noto Sans): with a strong/quantized stem mode for
+    # DirectWrite (3rd letter q/s), sized/gridfit change 23-55% of pixels up to
+    # ~20 px; with natural stems (n) nothing. The x-height setting plays no part.
+    hinted = cfg["hint"] in PRESETS
+    mode = (cfg.get("hint_mode") if str(cfg.get("hint_mode", "auto")) != "auto"
+            else PRESETS[cfg["hint"]][0] if hinted else "")
+    if cfg["gasp"] in ("sized", "gridfit") and hinted and hs in ("medium", "full"):
+        if mode[-1:] != "n":
+            add("system", f"gasp '{cfg['gasp']}' lacks symmetric smoothing: FreeType 2.15 runs the "
+                          "static fonts' bytecode differently from ttfautohint's own gasp up to "
+                          "about 20 px; 'smooth' or 'keep' leaves them as hinted")
+        else:
+            add("system", f"gasp '{cfg['gasp']}': with natural stems ({mode}) FreeType 2.15 "
+                          "renders the same as with ttfautohint's own gasp")
     elif cfg["gasp"] not in ("keep", ""):
         add("system", "gasp only matters to FreeType when the bytecode runs (hintmedium/full); "
-                      "under hintslight it is for Windows/Wine and validators")
+                      "otherwise it is for Windows/Wine and validators")
     add("system", "after installing: fc-cache -f, then restart the apps (and log out for GTK)")
     return out
 
