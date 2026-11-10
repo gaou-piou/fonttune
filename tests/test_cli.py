@@ -491,11 +491,33 @@ def test_check_flags_measured_problems(tmp_path):
         a = b"".join(d for *_, d in r.glyphs(str(clean), 16))
         b = b"".join(d for *_, d in r.glyphs(str(only_flag), 16))
     assert len(a) == len(b) and sum(x != y for x, y in zip(a, b)) > 0.2 * len(a)   # measured 35%
+    from fonttune.check import overlap_glyphs
+    assert [c for c, _ in check(str(only_flag))] == ["overlap"]
+    of = TTFont(only_flag)
+    composites = [n for n in overlap_glyphs(of) if of["glyf"][n].isComposite()]
+    assert composites          # unflagged composites of flagged parts are oversampled too
+    # the component flag alone, on one composite: it and composites built on it
+    f = TTFont(clean)
+    comp = next(n for n in f.getGlyphOrder() if f["glyf"][n].isComposite())
+    f["glyf"][comp].components[0].flags |= 0x0400
+    assert comp in overlap_glyphs(f) and len(overlap_glyphs(f)) < len(composites)
+    # bytecode in a static font is fine; no family name is not
+    f = TTFont(clean)
+    from fontTools.ttLib.tables import ttProgram
+    f["fpgm"] = newTable("fpgm")
+    f["fpgm"].program = ttProgram.Program()
+    f["fpgm"].program.fromBytecode(b"")
+    hinted_static = tmp_path / "hinted-static.ttf"
+    f.save(hinted_static)
+    assert check(str(hinted_static)) == []
+    f["name"].removeNames(nameID=1)
+    f["name"].removeNames(nameID=16)
+    f.save(hinted_static)
+    assert [c for c, _ in check(str(hinted_static))] == ["names"]
     # hinted VF and gasp without symmetric smoothing
     hvf = tmp_path / "hvf.ttf"
     t = TTFont(vf)
     t["prep"] = newTable("prep")
-    from fontTools.ttLib.tables import ttProgram
     t["prep"].program = ttProgram.Program()
     t["prep"].program.fromBytecode(b"")
     t["fpgm"] = newTable("fpgm")
@@ -532,3 +554,18 @@ def test_check_flags_measured_problems(tmp_path):
     if not shutil.which("fontbakery"):
         r = run("check", "--fontbakery", str(clean))
         assert r.returncode == 2 and "not installed" in r.stderr
+    # collections are checked face by face
+    from fontTools.ttLib import TTCollection
+    ttc = TTCollection()
+    ttc.fonts = [TTFont(clean), TTFont(flagged)]
+    ttc.save(tmp_path / "pair.ttc")
+    r = run("check", str(tmp_path / "pair.ttc"))
+    assert r.returncode == 1 and "pair.ttc#0: ok" in r.stdout and "pair.ttc#1: 1 warning" in r.stdout
+    # a failing fontbakery makes the status 1
+    import os
+    fb = tmp_path / "fb" / "fontbakery"
+    fb.parent.mkdir()
+    fb.write_text("#!/bin/sh\nexit 3\n")
+    fb.chmod(0o755)
+    r = run("check", "--fontbakery", str(clean), env={**os.environ, "PATH": str(fb.parent)})
+    assert r.returncode == 1 and "clean.ttf: ok" in r.stdout

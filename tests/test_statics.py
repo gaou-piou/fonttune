@@ -69,3 +69,65 @@ def test_statics_validates_pins_before_writing(tmp_path):
                        capture_output=True, text=True)
     assert r.returncode != 0 and "has no slnt axis" in r.stderr
     assert not out.exists()
+
+
+def test_statics_opsz_auto_reads_unscaled_size(tmp_path, monkeypatch):
+    """With a desktop at 18 pt and text-scaling 1.25, opsz=auto must cut opsz 18
+    (inside Adwaita's 14-32), not the scaled 22.5."""
+    vf = Path("/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf")
+    if not vf.is_file():
+        pytest.skip("needs Adwaita Sans")
+    gs = tmp_path / "bin" / "gsettings"
+    gs.parent.mkdir()
+    gs.write_text("#!/bin/sh\ncase \"$3\" in font-name) echo \"'Adwaita Sans 18'\";; "
+                  "text-scaling-factor) echo 1.25;; esac\n")
+    gs.chmod(0o755)
+    monkeypatch.setenv("PATH", str(gs.parent))
+    step = BIN.parent.parent / "fonttune" / "steps" / "statics.py"
+    out = tmp_path / "out"
+    r = subprocess.run([sys.executable, "-I", str(step), "-o", str(out), "--family", "T",
+                        "--weights", "400", "--axis", "opsz=auto", str(vf)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "opsz auto: 18" in r.stdout, r.stdout + r.stderr
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune.ftrender import Renderer
+    [static] = out.glob("*.ttf")
+    with Renderer() as rr:
+        x = rr.extent(str(static), 30, "x", "none")[0]
+        at = {o: rr.extent(str(vf), 30, "x", "none", {"opsz": o})[0] for o in (18, 22.5)}
+    assert x == at[18] != at[22.5]
+
+
+def test_statics_slnt_pin_that_clamps_to_upright(tmp_path):
+    """A slnt pin outside the axis is clamped; one that ends up at 0 would cut an
+    upright labelled italic, so it stops. Adwaita's opsz axis stands in for slnt
+    (renamed, range -10..0)."""
+    vf = Path("/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf")
+    if not vf.is_file():
+        pytest.skip("needs Adwaita Sans")
+    from fontTools.ttLib import TTFont
+    f = TTFont(vf)
+    for a in f["fvar"].axes:
+        if a.axisTag == "opsz":
+            a.axisTag, a.minValue, a.defaultValue, a.maxValue = "slnt", -10, 0, 0
+    for inst in f["fvar"].instances:
+        inst.coordinates["slnt"] = 0
+        del inst.coordinates["opsz"]
+    if "STAT" in f:
+        del f["STAT"]
+    slanted = tmp_path / "slnt.ttf"
+    f.save(slanted)
+    step = BIN.parent.parent / "fonttune" / "steps" / "statics.py"
+    for pin, ok in (("5", False), ("-20", True)):
+        out = tmp_path / pin
+        r = subprocess.run([sys.executable, "-I", str(step), "-o", str(out), "--family", "T",
+                            "--weights", "400", "--axis", f"slnt={pin}", str(slanted)],
+                           capture_output=True, text=True)
+        assert (r.returncode == 0) == ok, r.stdout + r.stderr
+        assert "Traceback" not in r.stderr
+        if ok:
+            [static] = out.glob("*.ttf")
+            t = TTFont(static)
+            assert t["post"].italicAngle == -10 and t["OS/2"].fsSelection & 1
+        else:
+            assert not out.exists()
