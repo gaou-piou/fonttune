@@ -23,6 +23,10 @@ everywhere else. Only OS/2.usWeightClass is touched; the name table and
 outlines are left alone. Variable fonts are skipped: their weight comes from
 the fvar axis, not from usWeightClass.
 
+Apple fonts (vendor APPL) use Apple's scale, where Ultralight (100) sits below
+Thin (200); every other family uses the OpenType scale, Thin 100 and ExtraLight
+200, so Inter Thin is not pushed onto ExtraLight.
+
 The weight is looked up by the font's own subfamily name (nameID 17, falling
 back to nameID 2, with any "Italic" dropped), never by filename.
 """
@@ -30,7 +34,8 @@ import sys
 
 from fontTools.ttLib import TTFont
 
-WEIGHTS = {
+# Apple's own scale: Ultralight below Thin (SF Pro Ultralight 100, Thin 200).
+APPLE_WEIGHTS = {
     "ultralight": 100,
     "thin": 200,
     "light": 300,
@@ -40,6 +45,19 @@ WEIGHTS = {
     "bold": 700,
     "heavy": 800,
     "black": 900,
+}
+
+# Everyone else (OpenType spec, Google Fonts): Thin is the lightest, 100.
+WEIGHTS = {
+    "thin": 100, "hairline": 100,
+    "extralight": 200, "ultralight": 200,
+    "light": 300,
+    "regular": 400,
+    "medium": 500,
+    "semibold": 600, "demibold": 600,
+    "bold": 700,
+    "extrabold": 800, "ultrabold": 800,
+    "black": 900, "heavy": 900,  # the spec's "Black (Heavy)"; Iosevka, Source Han
 }
 
 
@@ -63,7 +81,7 @@ def _table(font):
     for prefix, table in FAMILY_WEIGHTS.items():
         if fam.startswith(prefix):
             return table
-    return WEIGHTS
+    return APPLE_WEIGHTS if font["OS/2"].achVendID.strip() == "APPL" else WEIGHTS
 
 
 def _subfamily(font):

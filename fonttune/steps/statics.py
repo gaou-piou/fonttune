@@ -89,8 +89,10 @@ def make_static(path, outdir, family, suffix, weight, cut, pins):
     # oversampling: slower and slightly different coverage at the joins.
     font = instantiateVariableFont(font, limits, updateFontNames=False,
                                    overlap=OverlapMode.REMOVE)
-    if "STAT" in font and "slnt" in pins:
-        del font["STAT"]  # its labels no longer describe this font
+    if "STAT" in font:
+        # its axis values point at name IDs >= 256, deleted below (OTS then rejects
+        # the table); a static font does not need STAT, and `trak = "stat"` adds one
+        del font["STAT"]
 
     fam = family + (" " + suffix if suffix else "")
     wname = WEIGHTS[weight]

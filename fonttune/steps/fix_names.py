@@ -50,6 +50,7 @@ has no ss06/cv07/case, but must still not collide with the stock instal).
 Usage: fix_names.py [--suffix SUFFIX] FONT [FONT...]
 """
 import argparse
+import re
 import sys
 
 from fontTools.ttLib import TTFont
@@ -111,6 +112,20 @@ def drop_duplicate_mac_records(name):
     return dropped
 
 
+PS_IDS = (3, 6, 25)  # unique ID, PostScript name, variations PostScript prefix: no spaces
+
+
+def replace_family(rec, spaced, nospace):
+    """Replace the family in one name record in a single pass, so a replacement is
+    never matched again (base 'Inter' -> 'Inter Alt' must not become 'InterAlt Alt').
+    When both spellings are the same string, PostScript-like IDs get the one
+    without spaces and the others the spaced one."""
+    pairs = [spaced, nospace] if rec.nameID in PS_IDS else [nospace, spaced]
+    table = dict(pairs)
+    pat = re.compile("|".join(re.escape(k) for k in sorted(table, key=len, reverse=True)))
+    return pat.sub(lambda m: table[m.group()], rec.toUnicode())
+
+
 def suffix_family(font, suffix):
     """Append suffix to the family name, everywhere it stands for the family."""
     if suffix.split()[-1].lower() in PANGO_STYLE_WORDS:
@@ -120,15 +135,13 @@ def suffix_family(font, suffix):
     base = name.getDebugName(16) or name.getDebugName(1)
     if not base:
         sys.exit("fix_names.py: no family name in the font")
-    pairs = [(base, base + suffix),
-             (base.replace(" ", ""), base.replace(" ", "") + suffix.replace(" ", ""))]
+    spaced = (base, base + suffix)
+    nospace = (base.replace(" ", ""), base.replace(" ", "") + suffix.replace(" ", ""))
     for rec in name.names:
         if rec.nameID not in FAMILY_IDS:
             continue
         old = rec.toUnicode()
-        new = old
-        for a, b in pairs:
-            new = new.replace(a, b)
+        new = replace_family(rec, spaced, nospace)
         if new != old:
             rec.string = new.encode(rec.getEncoding(), errors="replace")
     return base

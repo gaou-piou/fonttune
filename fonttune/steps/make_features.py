@@ -239,6 +239,20 @@ PANGO_STYLE_WORDS = {
 }
 
 
+PS_IDS = (3, 6, 25)  # unique ID, PostScript name, variations PostScript prefix: no spaces
+
+
+def replace_family(rec, spaced, nospace):
+    """Replace the family in one name record in a single pass, so a replacement is
+    never matched again (base 'Inter' -> 'Inter Alt' must not become 'InterAlt Alt').
+    When both spellings are the same string, PostScript-like IDs get the one
+    without spaces and the others the spaced one."""
+    pairs = [spaced, nospace] if rec.nameID in PS_IDS else [nospace, spaced]
+    table = dict(pairs)
+    pat = re.compile("|".join(re.escape(k) for k in sorted(table, key=len, reverse=True)))
+    return pat.sub(lambda m: table[m.group()], rec.toUnicode())
+
+
 def rename(font, new_family):
     """Replace the family name in every place it stands for the family."""
     if new_family.split()[-1].lower() in PANGO_STYLE_WORDS:
@@ -251,15 +265,13 @@ def rename(font, new_family):
     base = n16 or n1
     if not base:
         sys.exit("make_features.py: no family name in the font")
-    pairs = [(base, new_family),
-             (base.replace(" ", ""), new_family.replace(" ", ""))]
+    spaced = (base, new_family)
+    nospace = (base.replace(" ", ""), new_family.replace(" ", ""))
     for rec in name.names:
         if rec.nameID not in (1, 3, 4, 6, 16, 21, 25):
             continue
         old = rec.toUnicode()
-        new = old
-        for a, b in pairs:
-            new = new.replace(a, b)
+        new = replace_family(rec, spaced, nospace)
         if new != old:
             rec.string = new
     return base
