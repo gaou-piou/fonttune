@@ -106,12 +106,14 @@ class Renderer:
         finally:
             self.lib.FT_Done_Face(face)
 
-    def extent(self, font, ppem, char, mode="slight"):
+    def extent(self, font, ppem, char, mode="slight", axes=None):
         """(top, bottom) of char's hinted outline at ppem, in px from the baseline."""
         face = FT_Face()
         if self.lib.FT_New_Face(self.handle, os.fsencode(font), 0, ctypes.byref(face)):
             raise RuntimeError(f"cannot open {font}")
         try:
+            if axes:
+                self._set_axes(face, font, axes)
             self.lib.FT_Set_Char_Size(face, 0, round(ppem * 64), 72, 72)
             gid = self.lib.FT_Get_Char_Index(face, ord(char))
             if not gid or self.lib.FT_Load_Glyph(face, gid, MODES[mode] & ~LOAD_RENDER):
@@ -124,11 +126,12 @@ class Renderer:
 
     def _set_axes(self, face, font, axes):
         from fontTools.ttLib import TTFont
-        fvar = TTFont(font, lazy=True)["fvar"].axes
+        with TTFont(font, lazy=True) as t:
+            fvar = t["fvar"].axes if "fvar" in t else []
         unknown = set(axes) - {a.axisTag for a in fvar}
         if unknown:
             raise ValueError(f"{font} has no axis {', '.join(sorted(unknown))}")
-        vals = [axes.get(a.axisTag, a.defaultValue) for a in fvar]
+        vals = [min(max(axes.get(a.axisTag, a.defaultValue), a.minValue), a.maxValue) for a in fvar]
         arr = (ctypes.c_long * len(vals))(*(round(v * 65536) for v in vals))
         if self.lib.FT_Set_Var_Design_Coordinates(face, len(vals), arr):
             raise RuntimeError(f"cannot set axes on {font}")

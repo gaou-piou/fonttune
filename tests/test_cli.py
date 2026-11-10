@@ -412,3 +412,6 @@ def test_xheight_snaps_under_hintslight():
     r = run("xheight", "--pt", "11,12", font)
     assert r.returncode == 0 and "clean sizes:" in r.stdout and "+3.0%" in r.stdout
     assert run("xheight", "--pt", "x", font).returncode == 2
+    r = run("xheight", "--mode", "full", "--pt", "12", font)       # Adwaita Sans has no fpgm
+    assert r.returncode == 0 and "no bytecode" in r.stdout
+

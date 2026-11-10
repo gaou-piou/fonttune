@@ -71,8 +71,10 @@ autofitter rounds the x-height to whole pixels and scales the lowercase with
 it, so the change depends on the size: Adwaita Sans is +3.0% at 12 pt, -0.2%
 at 11 pt and +7.5% at 11.5 pt. Sizes where the x-height and the
 lowercase/capital ratio both stay within `--tolerance` (1.5%) are listed as
-clean; pick the UI font size from them. `--mode full` reads the font's
-bytecode instead (hintmedium/hintfull).
+clean; pick the UI font size from them. Variable fonts with an `opsz` axis
+are measured at opsz = the size in points, as Pango draws them. `--mode full`
+reads the font's own bytecode (hintmedium/hintfull); fonts without one are
+skipped there, FreeType autohints them anyway.
 
 ## Variable fonts: `statics` and `fit-weight`
 
