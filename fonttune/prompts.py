@@ -95,6 +95,17 @@ def _table_text(usage):
     return ""
 
 
+def _nohint_option(measured):
+    """The short 'nohint' entry of the hint question."""
+    text = ("no hinting at all: the package ships an opt-in fontconfig rule (hintnone for "
+            "these families only), the outlines are drawn as designed, as on macOS")
+    if measured:
+        name, ppem, dx, dr = measured
+        text += (f". Hintslight changes {name} at {ppem:.4g} ppem now by x-height "
+                 f"{dx * 100:+.1f}%, lowercase/capitals {dr * 100:+.1f}%; this keeps 0%")
+    return text
+
+
 def _nohint_text(measured):
     """The nohint question, with the Regular's x-height change measured now."""
     now = ""
@@ -227,28 +238,27 @@ def ask_config(cfg, facts, skip=()):
             "is small."), [
             ("", "no, keep the font's own spacing"), ("all", "Latin, Greek and Cyrillic"),
             ("latin", "Latin only"), ("greek", "Greek only")], cfg["even_spacing"] or "")
-    if facts.get("variable") and not facts.get("hintable", True) and ask("hint"):
+    offer = ask("nohint")          # hintnone is an answer to "how to hint", so it is offered there
+    hint_asked = False
+    if cfg["nohint"] and not offer and ask("hint"):
+        skipped("hint", "nohint is set: these families are drawn unhinted, the bytecode would "
+                "never run")
+        cfg["hint"] = ""
+    elif facts.get("variable") and not facts.get("hintable", True) and ask("hint"):
         skipped("hint", "ttfautohint hints a variable font only at its default instance and "
                 "distorts the other weights once bytecode is on (choose the static variant)")
         cfg["hint"] = ""
     elif facts.get("hintable", facts["gridable"]) and ask("hint"):
+        hint_asked = True
         hs = hintstyle()
         weak = hs in ("slight", "none")
         if weak:
             print(f"  note: the desktop uses hint style '{hs}': FreeType then ignores the "
                   "ttfautohint bytecode and the hints make no difference.")
-        cur = cfg["hint"] or ("" if weak else "balanced")
-        cfg["hint"] = choice("hint", (
-            "Add ttfautohint hinting instructions?"
-            "\n\nHints snap heights (baseline, x-height, cap height) and horizontal strokes "
-            "to whole pixels: sharper, darker text at small sizes, at the price of slightly "
-            "changed proportions. FreeType runs them only at hintmedium/hintfull; at "
-            "hintslight (the GNOME default) it uses its own autohinter and the hints do "
-            "nothing. `fonttune hintconf` writes a fontconfig file that switches just these "
-            "families to hintmedium (Chromium and Electron excluded)."
-            "\n\nOnly the y direction is hinted on Linux, so the presets differ in how hard "
-            "horizontal strokes are snapped and from which size."), [
-            ("", "no hints" + (" (recommended with this hint style)" if weak else "")),
+        cur = "nohint" if offer and cfg["nohint"] else cfg["hint"] or ("" if weak else "balanced")
+        opts = [
+            ("", "no hints in the fonts; the desktop's hint style applies (with hintslight: "
+                 "FreeType's autohinter)" + (" (recommended with this hint style)" if weak else "")),
             ("balanced", "strokes rounded to whole pixels where that keeps their ratio, "
                          "hinted from 8 to 50 px, x-height rounded up below 14 px for "
                          "legibility (ttfautohint's defaults)"),
@@ -257,15 +267,35 @@ def ask_config(cfg, facts, skip=()):
             ("natural", "strokes keep their design thickness and the x-height is not bumped: "
                         "only the heights are aligned. Least distortion, softer"),
             ("light", "like natural but only from 12 px up; smaller text is left unhinted. "
-                      "For HiDPI screens")], cur)
-    if ask("nohint"):
-        if cfg["hint"]:
-            skipped("nohint", f"hint is '{cfg['hint']}': its bytecode needs hinting on "
-                              "(answer no hints to get this question)")
-            cfg["nohint"] = False
-        else:
-            cfg["nohint"] = yesno("nohint", _nohint_text(facts.get("slight_xheight")),
-                                  bool(cfg["nohint"]))
+                      "For HiDPI screens")]
+        if offer:
+            opts.append(("nohint", _nohint_option(facts.get("slight_xheight"))))
+        h = choice("hint", (
+            "How should these families be hinted?"
+            "\n\nHints snap heights (baseline, x-height, cap height) and horizontal strokes "
+            "to whole pixels: sharper, darker text at small sizes, at the price of slightly "
+            "changed proportions. ttfautohint's hints (balanced ... light) run only at "
+            "hintmedium/hintfull; at hintslight (the GNOME default) FreeType uses its own "
+            "autohinter and they do nothing. `fonttune hintconf` writes a fontconfig file that "
+            "switches just these families to hintmedium (Chromium and Electron excluded)."
+            "\n\nOnly the y direction is hinted on Linux, so the presets differ in how hard "
+            "horizontal strokes are snapped and from which size."
+            + ("\n\nnohint goes the other way: no hinting at all for these families, the "
+               "outlines exactly as designed (as macOS draws them). Details below if you pick it."
+               if offer else "")), opts, cur)
+        if h == "nohint":
+            print(textwrap.fill(_nohint_text(facts.get("slight_xheight")).split("\n\n", 1)[1]
+                                .replace("\n\n", " "), WIDTH, initial_indent="    ",
+                                subsequent_indent="    "))
+        cfg["hint"] = "" if h == "nohint" else h
+        if offer:
+            cfg["nohint"] = h == "nohint"
+    if offer and not hint_asked and cfg["hint"]:
+        skipped("nohint", f"hint is '{cfg['hint']}': its bytecode needs hinting on")
+        cfg["nohint"] = False
+    elif offer and not hint_asked:   # variable or unhintable fonts: hintnone is still possible
+        cfg["nohint"] = yesno("nohint", _nohint_text(facts.get("slight_xheight")),
+                              bool(cfg["nohint"]))
     if ask("alts"):
         alts = facts.get("alts", [])
         if alts:

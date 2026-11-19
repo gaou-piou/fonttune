@@ -33,8 +33,9 @@ from the unhinted design / extra ink), hintslight against hintnone: SF Pro 0.133
 against 0.040 / 0%, Inter 0.102 against 0.039, Iosevka 0.135 against 0.035. The rule wins
 over the hint style a program asks cairo for (GTK4's built-in hintslight: identical
 bitmaps to hintnone once it is on); Chromium and Firefox read it too. It excludes `hint`,
-and stem darkening no longer reaches those families. The question shows the Regular's
-x-height change at the interface size under hintslight.
+and stem darkening no longer reaches those families. It is the `nohint` answer of the `hint`
+question (a question of its own for variable fonts, where hint is not asked) and shows the
+Regular's x-height change at the interface size under hintslight.
 
 `fonttune configure --save-to FILE FONT...` asks the questions, prints a summary of the choices with what to set up in the system and browsers, waits for Enter (n aborts), and writes the settings;
 `fonttune run --config FILE --in-place [--only|--skip steps] FONT...` applies them.

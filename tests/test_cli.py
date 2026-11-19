@@ -833,24 +833,40 @@ def test_nohint_question_config_and_snippet(tmp_path, monkeypatch, capsys):
     sys.path.insert(0, str(BIN.parent.parent))
     from fonttune import advice, prompts
     from fonttune.cli import DEFAULTS
-    seen = {}
+    seen, pick = {}, {"hint": "nohint"}
 
     def yesno(k, title, default):
         seen[k] = title
         return True if k == "nohint" else default
-    monkeypatch.setattr(prompts, "choice", lambda k, *a: a[-1])
+
+    def choice(k, title, opts, default):
+        seen[k] = (title, dict(opts))
+        return pick.get(k, default)
+    monkeypatch.setattr(prompts, "choice", choice)
     monkeypatch.setattr(prompts, "yesno", yesno)
     monkeypatch.setattr(prompts, "hintstyle", lambda: "slight")
     fx = {"trak": False, "gridable": True, "hintable": True, "variable": False,
           "slight_xheight": ("Inter-Regular.ttf", 14.6667, -0.002, -0.032)}
+    # static fonts: nohint is one answer of the hint question, not a question of its own
     cfg = prompts.ask_config(DEFAULTS, fx)
-    assert cfg["nohint"] is True
-    assert "Inter-Regular.ttf at the interface size (14.67 ppem now): x-height -0.2%, " \
-           "lowercase against capitals -3.2%" in seen["nohint"]
+    assert (cfg["hint"], cfg["nohint"]) == ("", True) and "nohint" not in seen
+    assert "Inter-Regular.ttf at 14.67 ppem now by x-height -0.2%, lowercase/capitals -3.2%" \
+        in seen["hint"][1]["nohint"]
+    assert "lowercase against capitals -3.2%" in capsys.readouterr().out  # details once picked
+    pick["hint"] = "natural"
+    cfg = prompts.ask_config({**DEFAULTS, "nohint": True}, fx)
+    assert (cfg["hint"], cfg["nohint"]) == ("natural", False)
+    # variable fonts: no hint question, so nohint is asked on its own
+    seen.clear()
+    cfg = prompts.ask_config(DEFAULTS, {**fx, "hintable": False, "variable": True})
+    assert cfg["nohint"] is True and "Inter-Regular.ttf at the interface size (14.67 ppem now): " \
+        "x-height -0.2%, lowercase against capitals -3.2%" in seen["nohint"]
     seen.clear()
     cfg = prompts.ask_config({**DEFAULTS, "hint": "natural", "nohint": True}, fx, skip={"hint"})
     assert "nohint" not in seen and cfg["nohint"] is False
     assert "[nohint] skipped: hint is 'natural'" in capsys.readouterr().out
+    cfg = prompts.ask_config({**DEFAULTS, "hint": "natural", "nohint": True}, fx, skip={"nohint"})
+    assert "[hint] skipped: nohint is set" in capsys.readouterr().out and cfg["hint"] == ""
     prompts.ask_config({**DEFAULTS, "nohint": True}, {**fx, "freetype": True}, skip={"nohint"})
     assert "nohint is on: with its snippet enabled" in capsys.readouterr().out
     state = {"firefox": {}, "chromium_flag_files": [], "gtk": {}, "rendering": "automatic"}
