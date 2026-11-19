@@ -66,6 +66,35 @@ def number(key, title):
         print("  type a positive number")
 
 
+def _units(u, upm):
+    return f"{round(u):+d} units/glyph ({u / upm * 100:+.2f}% of the em)"
+
+
+def _usage_text(usage):
+    """The 'usage' trak option, with what it would bake for each family now."""
+    text = ("remove it and add, per family, the spacing it asks for at the size GNOME "
+            "uses that family: the interface, document or monospace font (x text "
+            "scaling); a family that is none of them gets the interface size. Right for "
+            "e.g. a document font set larger than the interface. Follows the desktop "
+            "setting at build time; change those sizes later and rebuild")
+    if usage:
+        now = "; ".join(f"{fam} at {pt:g} pt ({why}): {_units(u, upm)}"
+                        for fam, pt, why, u, upm, _ in usage[:4] if u is not None)
+        text += f". Now: {now}" + (f" and {len(usage) - 4} more families" if len(usage) > 4 else "")
+    return text
+
+
+def _table_text(usage):
+    """One family's table, so the sizes in the options mean something."""
+    for fam, _, _, _, upm, samples in usage:
+        vals = [f"{x:g} pt {round(u):+d}" for x, u in samples if u is not None]
+        if vals:
+            return (f"\n\n{fam}'s table asks for {', '.join(vals)} units/glyph ({upm} units "
+                    f"per em): one value baked in is right at its size and drifts away from "
+                    f"Apple's spacing above and below it.")
+    return ""
+
+
 def ask_config(cfg, facts, skip=()):
     """facts: what the input fonts allow ({'trak', 'gridable', 'hintable', 'variable'}: bool).
     skip: keys already decided by flags or environment; they are not asked."""
@@ -113,6 +142,7 @@ def ask_config(cfg, facts, skip=()):
                          f"program and right at the size you read most; headings come out a "
                          f"little looser than Apple would set them. Follows the desktop "
                          f"setting at build time"),
+                ("usage", _usage_text(facts.get("trak_usage", []))),
                 ("custom", "like auto, but you type the point size")]
         cur = cfg["trak"] or ""
         if cur not in [v for v, _ in opts]:
@@ -122,7 +152,7 @@ def ask_config(cfg, facts, skip=()):
             "\n\nApple fonts carry a table of extra letter-spacing per point size (looser "
             "when small, tighter when large). macOS applies it; on Linux every program "
             "treats it differently, so the same text has a different width in GTK, Chromium "
-            "and Firefox."), opts, cur)
+            "and Firefox." + _table_text(facts.get("trak_usage", []))), opts, cur)
         if cfg["trak"] == "custom":
             cfg["trak"] = number("trak", "point size")
     if facts.get("variable") and ask("pixel_grid"):

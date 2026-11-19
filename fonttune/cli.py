@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import __version__
-from .system import auto_ppem, auto_pt
+from .system import auto_ppem, auto_pt, usage_pt, usage_sizes
 
 STEPS_DIR = Path(__file__).resolve().parent / "steps"
 PROFILES_DIR = Path(__file__).resolve().parent.parent / "profiles"
@@ -75,6 +75,39 @@ def save_config(cfg, path=CONFIG):
     path.write_text("\n".join(lines) + "\n")
 
 
+def family(t):
+    """Typographic family (name ID 16, else 1) of an open TTFont, '' if none."""
+    n = t["name"]
+    for nid in (16, 1):
+        r = n.getName(nid, 3, 1, 0x409) or n.getName(nid, 1, 0, 0)
+        if r:
+            return r.toUnicode()
+    return ""
+
+
+def trak_usage(fonts, sizes=None):
+    """[(family, pt, why, units, upm, samples)] for each family with a trak table:
+    the size GNOME uses it at (system.usage_pt), the tracking Apple asks for
+    there, and [(pt, units)] at a few sizes to show what the table does."""
+    from fontTools.ttLib import TTFont
+    from .steps.strip_trak import tracking_at
+    sizes = usage_sizes() if sizes is None else sizes
+    out, seen = [], set()
+    for f in fonts:
+        try:
+            t = TTFont(f, lazy=True)
+            if "trak" not in t or family(t) in seen:
+                continue
+            fam = family(t)
+            pt, why = usage_pt(fam, sizes)
+            out.append((fam, pt, why, tracking_at(t, pt), t["head"].unitsPerEm,
+                        [(x, tracking_at(t, x)) for x in (10, 12, 14, 17, 24)]))
+            seen.add(fam)
+        except Exception:  # noqa: BLE001 - unreadable fonts are reported by the steps
+            continue
+    return out
+
+
 def facts(fonts):
     """What the inputs allow, so prompts only ask relevant things."""
     from fontTools.ttLib import TTFont
@@ -107,7 +140,7 @@ def facts(fonts):
         ft = True
     except ImportError:
         ft = False
-    return {"trak": trak, "gridable": gridable, "hintable": hintable, "variable": variable,
+    return {"trak": trak, "trak_usage": trak_usage(fonts) if trak else [], "gridable": gridable, "hintable": hintable, "variable": variable,
             "cff": cff, "weights": weights, "alts": alts, "freetype": ft,
             "fontbakery": bool(shutil.which("fontbakery"))}
 
@@ -140,12 +173,12 @@ def validate(cfg):
     if cfg["gasp"] not in ("keep", "sized", "smooth", "gridfit"):
         die(f"unknown gasp mode {cfg['gasp']!r}")
     t = str(cfg["trak"])
-    if t not in ("", "strip", "stat", "auto"):
+    if t not in ("", "strip", "stat", "auto", "usage"):
         try:
             if float(t) <= 0:
                 raise ValueError
         except ValueError:
-            die(f"trak must be empty, strip, stat, auto or a point size, not {t!r}")
+            die(f"trak must be empty, strip, stat, auto, usage or a point size, not {t!r}")
     if cfg["even_spacing"] and not re.fullmatch(
             r"all|(latin|greek|cyrillic)(,(latin|greek|cyrillic))*", cfg["even_spacing"]):
         die("even_spacing must be all or a comma list of latin,greek,cyrillic")
@@ -308,6 +341,19 @@ def run(cfg, ns, fonts, out, dry):
             t = str(cfg["trak"])
             if t == "stat":
                 py("add_stat", *ttfs)
+            elif t == "usage":
+                from fontTools.ttLib import TTFont
+                sizes, groups, told = usage_sizes(), {}, set()
+                for w in ttfs:
+                    with TTFont(w, lazy=True) as tt:
+                        fam = family(tt)
+                    pt, why = usage_pt(fam, sizes)
+                    if fam not in told:
+                        told.add(fam)
+                        print(f"fonttune: trak usage: {fam or w.name} -> bake at {pt:g} pt ({why})")
+                    groups.setdefault(pt, []).append(w)
+                for pt, files in groups.items():
+                    py("strip_trak", "--bake", f"{pt:g}", *files)
             else:
                 py("strip_trak", *(["--bake", t] if t != "strip" else []), *ttfs)
         elif step == "otf2ttf":
@@ -471,7 +517,9 @@ def main(argv=None):
         p.add_argument("--config", help="read the settings from this file (no questions)")
         p.add_argument("--otf2ttf", action="store_true", default=None)
         p.add_argument("--weights", action="store_true", default=None)
-        p.add_argument("--trak", help="'strip', 'stat', 'auto' (bake at the GNOME UI font size) or a size in pt to bake")
+        p.add_argument("--trak", help="'strip', 'stat', 'auto' (bake at the GNOME UI font size), 'usage' (bake "
+                       "each family at the size GNOME uses it: interface, document or "
+                       "monospace font) or a size in pt to bake")
         p.add_argument("--even-spacing", dest="even_spacing", help="latin,greek,cyrillic or all")
         p.add_argument("--pixel-grid", dest="pixel_grid", help="auto or target ppem")
         p.add_argument("--ppem", type=float)

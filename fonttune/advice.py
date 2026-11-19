@@ -181,6 +181,10 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     if t == "stat":
         add("browser", "trak kept with STAT: HarfBuzz apps apply it at the requested size; "
                        "Firefox's own trak path is bypassed")
+    elif t == "usage":
+        add("system", "trak baked per family at the size GNOME uses it (the build log says "
+                      "which): after changing the interface, document or monospace font size, "
+                      "rebuild the package to follow it")
     elif t == "" and has_trak:
         add("browser", "trak untouched: Firefox applies it about 5x too strongly, "
                        "other programs differ; strip or stat makes them agree")

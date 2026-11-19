@@ -762,3 +762,68 @@ def test_trak_bake_shifts_every_instance_of_a_variable_font(tmp_path):
     for wght in (400, 700):
         a, b = (instantiateVariableFont(TTFont(p), {"wght": wght})["hmtx"] for p in (before, after))
         assert a["H"][0] - 22 == b["H"][0] and a["o"][0] - 22 == b["o"][0], wght
+
+
+def test_parse_font_and_usage_pt(monkeypatch):
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import system
+    assert system.parse_font("'SF Pro 14 @opsz=17'") == ("SF Pro", 14.0)
+    assert system.parse_font("'Adwaita Sans Bold 11'") == ("Adwaita Sans", 11.0)
+    assert system.parse_font("'Noto Sans, Bold 10.5'") == ("Noto Sans", 10.5)
+    assert system.parse_font("") is None and system.parse_font("'Inter'") is None
+    sizes = [("Inter", 11.0, "interface font"), ("SF Pro", 17.5, "document font")]
+    assert system.usage_pt("sf pro", sizes)[0] == 17.5
+    assert system.usage_pt("SF Pro Text", sizes) == (17.5, "document font 'SF Pro'")
+    assert system.usage_pt("SF Pros", sizes)[1].startswith("interface size")  # not a prefix word
+    monkeypatch.setattr(system, "_gsettings", lambda k: {
+        "font-name": "'Inter 11'", "document-font-name": "'SF Pro 14 @opsz=17'",
+        "monospace-font-name": "''", "text-scaling-factor": "1.25"}.get(k, ""))
+    assert system.usage_sizes() == [("Inter", 13.75, "interface font"),
+                                    ("SF Pro", 17.5, "document font")]
+
+
+def test_trak_usage_bakes_each_family_at_its_gnome_size(tmp_path):
+    from fontTools.ttLib import TTFont
+    src = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
+    if not Path(src).is_file():
+        pytest.skip("needs Adwaita Sans")
+    font = _with_trak(src, tmp_path / "AdwaitaSans-Regular.ttf", {12: 0, 14: -22})
+    d = tmp_path / "bin"
+    d.mkdir()
+    (d / "gsettings").write_text("#!/bin/sh\ncase \"$3\" in font-name) echo \"'Inter 11'\";; "
+                                 "document-font-name) echo \"'Adwaita Sans 14'\";; "
+                                 "text-scaling-factor) echo 1.0;; esac\n")
+    (d / "gsettings").chmod(0o755)
+    env = {**clean_env(), "PATH": str(d)}
+    r = run("run", "--no-ask", "--no-config", "--trak", "usage", "-o", str(tmp_path / "o"), font,
+            env=env)
+    assert r.returncode == 0, r.stderr
+    assert "Adwaita Sans -> bake at 14 pt (document font 'Adwaita Sans')" in r.stdout
+    assert "baked -22 units/glyph (14pt)" in r.stdout
+    out = TTFont(tmp_path / "o" / "AdwaitaSans-Regular.ttf")
+    assert "trak" not in out and out["hmtx"]["H"][0] == TTFont(src)["hmtx"]["H"][0] - 22
+    r = run("run", "--no-ask", "--no-config", "--trak", "nope", "--dry-run", "-o",
+            str(tmp_path / "o"), font, env=env)
+    assert r.returncode != 0 and "auto, usage or a point size" in r.stderr
+
+
+def test_trak_question_offers_usage_with_the_font_values(monkeypatch):
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune import prompts
+    from fonttune.cli import DEFAULTS
+    seen = {}
+
+    def choice(k, title, opts, default):
+        seen[k] = (title, dict(opts))
+        return "usage" if k == "trak" else default
+    monkeypatch.setattr(prompts, "choice", choice)
+    monkeypatch.setattr(prompts, "yesno", lambda k, *a: a[-1])
+    monkeypatch.setattr(prompts, "hintstyle", lambda: "slight")
+    usage = [("SF Pro", 14.0, "document font 'SF Pro'", -22, 2048, [(12, 0), (14, -22)])]
+    cfg = prompts.ask_config(DEFAULTS, {"trak": True, "trak_usage": usage, "gridable": False,
+                                        "hintable": False, "variable": True})
+    title, opts = seen["trak"]
+    assert cfg["trak"] == "usage"
+    assert "SF Pro at 14 pt (document font 'SF Pro'): -22 units/glyph (-1.07% of the em)" \
+        in opts["usage"]
+    assert "12 pt +0, 14 pt -22 units/glyph (2048 units per em)" in title

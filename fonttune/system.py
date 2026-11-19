@@ -58,6 +58,55 @@ def auto_pt():
     return round(auto_ppem() * 72 / 96, 4)
 
 
+# GNOME's font settings, in the order a family found in two of them takes its size from
+USAGE_KEYS = (("font-name", "interface font"), ("document-font-name", "document font"),
+              ("monospace-font-name", "monospace font"))
+# Pango font-description words that are style, not family ('Adwaita Sans Bold 11')
+_STYLE = {"normal", "roman", "regular", "book", "italic", "oblique", "thin", "hairline",
+          "light", "extralight", "ultralight", "semilight", "demilight", "medium", "semibold",
+          "semi-bold", "demibold", "demi-bold", "bold", "extrabold", "extra-bold",
+          "ultrabold", "ultra-bold", "heavy", "black", "ultraheavy", "condensed",
+          "semi-condensed", "expanded", "semi-expanded", "small-caps"}
+
+
+def parse_font(value):
+    """GNOME font setting -> (family, size in pt) or None.
+
+    "'SF Pro 14 @opsz=17'" -> ("SF Pro", 14.0); style words and a family list
+    after the first are dropped ("'Adwaita Sans Bold 11'" -> ("Adwaita Sans", 11.0))."""
+    m = re.match(r"^'?(.+?),? (\d+(?:\.\d+)?)(?: @\S*)*'?$", value.strip())
+    if not m:
+        return None
+    words = m.group(1).split(",")[0].split()
+    while len(words) > 1 and words[-1].lower() in _STYLE:
+        words.pop()
+    return (" ".join(words), float(m.group(2))) if words else None
+
+
+def usage_sizes():
+    """[(family, pt x text-scaling-factor, label)] for GNOME's interface, document
+    and monospace fonts (unreadable or unset ones are left out)."""
+    scale, out = text_scale(), []
+    for key, label in USAGE_KEYS:
+        f = parse_font(_gsettings(key))
+        if f:
+            out.append((f[0], round(f[1] * scale, 4), label))
+    return out
+
+
+def usage_pt(family, sizes=None):
+    """(pt, label) a family is used at, from usage_sizes(): an exact (case-blind)
+    family match first, then a family that extends a set one ('SF Pro Text' under
+    'SF Pro'). Not set anywhere: the interface size, auto_pt()."""
+    sizes = usage_sizes() if sizes is None else sizes
+    fam = family.casefold()
+    for match in (lambda u: fam == u, lambda u: fam.startswith(u + " ")):
+        for f, pt, label in sizes:
+            if match(f.casefold()):
+                return pt, f"{label} '{f}'"
+    return auto_pt(), "interface size: the family is not one of GNOME's fonts"
+
+
 def hintstyle():
     """'none' | 'slight' | 'medium' | 'full' as the desktop sets it ('' if unknown).
 

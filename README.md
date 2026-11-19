@@ -27,7 +27,14 @@ anything). The lookups run last, so case/liga forms get their own alternate
 `fonttune configure --save-to FILE FONT...` asks the questions, prints a summary of the choices with what to set up in the system and browsers, waits for Enter (n aborts), and writes the settings;
 `fonttune run --config FILE --in-place [--only|--skip steps] FONT...` applies them.
 `FONTTUNE_<KEY>` environment variables (e.g. `FONTTUNE_OTF2TTF=true`) answer a question
-without asking. `trak` is empty, `strip`, `stat`, `auto` (bake at the GNOME interface font size, read when it runs) or a point size to bake.
+without asking. `trak` is empty, `strip`, `stat`, `auto` (bake at the GNOME interface font size, read when it runs), `usage` or a point size to bake.
+`usage` bakes each family at the size GNOME uses it: `font-name`, `document-font-name` or
+`monospace-font-name` (x text-scaling-factor, in that order when a family is in two), also
+for families that extend a set one (`SF Pro Text` under `SF Pro`); others get the
+interface size. With `document-font-name 'SF Pro 14'` SF Pro gets Apple's 14 pt value,
+-22 units/glyph (-1.07% of the em), instead of the interface size's +12. The build log
+prints the size and source per family. Variable fonts are baked too: HVAR deltas add to
+the hmtx advance, so one constant moves every instance alike.
 `pixel_grid` and `even_spacing` are mutually exclusive.
 
 The last three questions pick reports that run after the steps on the built
