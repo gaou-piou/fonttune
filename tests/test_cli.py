@@ -890,3 +890,22 @@ def test_hintconf_none_covers_variable_and_unhinted_fonts(tmp_path):
         r = subprocess.run(["fc-match", "-f", "%{hintstyle}", "Adwaita Sans"],
                            capture_output=True, text=True, env=env)
         assert r.stdout == "0", r.stdout
+
+
+def test_xheight_suggests_a_near_size_or_nohint(tmp_path):
+    font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
+    if not Path(font).is_file():
+        pytest.skip("needs Adwaita Sans")
+    pytest.importorskip("freetype")
+    sys.path.insert(0, str(BIN.parent.parent))
+    from fonttune.xheight import advise
+    assert "12.5 pt is clean, 0.5 pt away" in advise(12, [12.5, 14], 0.03, 0.0)
+    assert "nohint" in advise(11, [12.5], -0.002, -0.032) and "x/H" not in advise(11, [], 0.1, float("nan"))
+    # Adwaita Sans: 12 pt +3.0% (not clean), 12.5 pt clean; 11 pt -3.2% x/H, nothing clean near
+    r = run("xheight", "--pt", "12,12.5", font, env=desktop(tmp_path, "Adwaita Sans 12"))
+    assert r.returncode == 0 and "12.5 pt is clean, 0.5 pt away" in r.stdout, r.stdout
+    r = run("xheight", "--pt", "12.5", font, env=desktop(tmp_path, "Adwaita Sans 11"))
+    out = " ".join(r.stdout.split())
+    assert "at the interface size (11 pt)" in out and "hintconf --style none" in out, out
+    r = run("xheight", "--pt", "12.5", font, env=desktop(tmp_path, "Adwaita Sans 12.5"))
+    assert "interface size" not in r.stdout                      # clean: nothing to suggest

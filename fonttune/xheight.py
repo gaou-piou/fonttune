@@ -17,6 +17,7 @@ import argparse
 import math
 import os
 import sys
+import textwrap
 
 from fontTools.ttLib import TTFont
 
@@ -57,6 +58,25 @@ def table(font, sizes, mode="slight", r=None, scale=1.0):
     finally:
         if own:
             r.close()
+
+
+NEAR = 0.5   # pt: how far from the interface size a clean size still counts as an answer
+
+
+def advise(now_pt, clean, dx, dr):
+    """What to do when the interface size is not clean: a clean size close by,
+    else drawing the family unhinted (fonttune's nohint)."""
+    near = [c for c in clean if abs(c - now_pt) <= NEAR + 1e-9]
+    ratio = "" if math.isnan(dr) else f", lowercase against capitals {dr * 100:+.1f}%"
+    head = (f"  at the interface size ({now_pt:g} pt) the x-height changes {dx * 100:+.1f}%"
+            f"{ratio}")
+    if near:
+        best = min(near, key=lambda c: abs(c - now_pt))
+        return f"{head}: {best:g} pt is clean, {abs(best - now_pt):g} pt away"
+    return (f"{head}, and no size within {NEAR:g} pt of it is clean. To keep the design at "
+            f"the size you use, draw this family unhinted: nohint (FONTTUNE_NOHINT=true; "
+            f"`fonttune hintconf --style none FONT...` writes the fontconfig rule): the "
+            f"x-height then stays exact at every size")
 
 
 def main(argv=None):
@@ -103,14 +123,19 @@ def main(argv=None):
             measured += 1
             print("      pt   ppem   x exact  x hinted  change   x/H")
             clean = []
+            ok = lambda dx, dr: abs(dx) * 100 <= a.tolerance and abs(dr) * 100 <= a.tolerance  # noqa: E731
             for pt, (p, ex, hx, dx, dr) in zip(pts, rows):
-                ok = abs(dx) * 100 <= a.tolerance and abs(dr) * 100 <= a.tolerance
-                if ok:
-                    clean.append(f"{pt:g} pt")
-                mark = (" clean" if ok else "") + (" <- now" if abs(p - now) < 0.01 else "")
+                if ok(dx, dr):
+                    clean.append(pt)
+                mark = (" clean" if ok(dx, dr) else "") + (" <- now" if abs(p - now) < 0.01 else "")
                 ratio = "   n/a" if math.isnan(dr) else f"{dr * 100:+5.1f}%"
                 print(f"  {pt:6g} {p:6g}  {ex:8.2f}  {hx:8.2f}  {dx * 100:+5.1f}%  {ratio}{mark}")
-            print(f"  clean sizes: {', '.join(clean) or 'none'}\n")
+            print(f"  clean sizes: {', '.join(f'{c:g} pt' for c in clean) or 'none'}")
+            at = [row for row in rows if abs(row[0] - now) < 0.01] or table(f, [now], a.mode, r, scale)
+            if not ok(*at[0][3:5]):
+                print(textwrap.fill(advise(now * 72 / 96 / scale, clean, at[0][3], at[0][4]),
+                                    78, subsequent_indent="  "))
+            print()
     print("change: hinted against exact x-height; x/H: lowercase against capitals (n/a: no 'H'). "
           + ("Only text hinted this way is affected (GTK4 automatic = hintslight)."
              if a.mode == "slight" else "Only text drawn with hintmedium/hintfull runs the bytecode."))
