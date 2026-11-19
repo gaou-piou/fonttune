@@ -63,24 +63,25 @@ def table(font, sizes, mode="slight", r=None, scale=1.0):
 NEAR = 0.5   # pt: how far from the interface size a clean size still counts as an answer
 
 
-def advise(now_pt, clean, dx, dr):
-    """What to do when the interface size is not clean: a clean size close by,
-    else drawing the family unhinted (fonttune's nohint)."""
+def advise(now_pt, clean, dx, dr, where="the interface size"):
+    """What to do when the size a family is used at is not clean: a clean size
+    close by, else drawing the family unhinted (fonttune's nohint)."""
     near = [c for c in clean if abs(c - now_pt) <= NEAR + 1e-9]
     ratio = "" if math.isnan(dr) else f", lowercase against capitals {dr * 100:+.1f}%"
-    head = (f"  at the interface size ({now_pt:g} pt) the x-height changes {dx * 100:+.1f}%"
+    head = (f"  at {where} ({now_pt:g} pt) the x-height changes {dx * 100:+.1f}%"
             f"{ratio}")
     if near:
         best = min(near, key=lambda c: abs(c - now_pt))
         return f"{head}: {best:g} pt is clean, {abs(best - now_pt):g} pt away"
     return (f"{head}, and no size within {NEAR:g} pt of it is clean. To keep the design at "
-            f"the size you use, draw this family unhinted: nohint (FONTTUNE_NOHINT=true; "
-            f"`fonttune hintconf --style none FONT...` writes the fontconfig rule): the "
-            f"x-height then stays exact at every size")
+            f"the size you use, draw this family unhinted: nohint (FONTTUNE_NOHINT=true in "
+            f"the fonttune packages; `fonttune hintconf --style none FONT...` writes the "
+            f"fontconfig rule): the x-height then stays exact at every size")
 
 
 def main(argv=None):
-    from .system import auto_ppem, text_scale
+    from .cli import family
+    from .system import text_scale, usage_pt, usage_sizes
     ap = argparse.ArgumentParser(prog="fonttune xheight", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("fonts", nargs="+")
@@ -103,15 +104,19 @@ def main(argv=None):
     if bad:
         ap.error(f"cannot read {', '.join(bad)}")
     scale = text_scale()
-    now = auto_ppem()
+    usage = usage_sizes()
     sizes = [round(p * 96 / 72 * scale, 2) for p in pts]
     if not all(1 <= s < 10000 for s in sizes):
         ap.error("--pt sizes must come to 1 to 9999 pixels at this text scale")
-    print(f"text-scaling-factor {scale:g}, UI font now {now:g} ppem; mode {a.mode}\n")
+    print(f"text-scaling-factor {scale:g}; mode {a.mode}\n")
     measured = 0
     with Renderer() as r:
         for f in a.fonts:
             print(os.path.basename(f) + (" (opsz = pt)" if has_opsz(f) else ""))
+            with TTFont(f, lazy=True, fontNumber=0) as t:
+                used, where = usage_pt(family(t), usage)
+            now = round(used * 96 / 72, 4)
+            print(f"  used at {used / scale:g} pt = {now:g} ppem: {where}")
             if a.mode == "full" and not has_bytecode(f):
                 print("  no bytecode (fpgm/prep): FreeType autohints it under full too\n")
                 continue
@@ -133,7 +138,8 @@ def main(argv=None):
             print(f"  clean sizes: {', '.join(f'{c:g} pt' for c in clean) or 'none'}")
             at = [row for row in rows if abs(row[0] - now) < 0.01] or table(f, [now], a.mode, r, scale)
             if not ok(*at[0][3:5]):
-                print(textwrap.fill(advise(now * 72 / 96 / scale, clean, at[0][3], at[0][4]),
+                print(textwrap.fill(advise(now * 72 / 96 / scale, clean, at[0][3], at[0][4],
+                                           "the size it is used at"),
                                     78, subsequent_indent="  "))
             print()
     print("change: hinted against exact x-height; x/H: lowercase against capitals (n/a: no 'H'). "

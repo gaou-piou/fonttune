@@ -111,7 +111,7 @@ def _nohint_text(measured):
     now = ""
     if measured:
         name, ppem, dx, dr = measured
-        now = (f" Measured on {name} at the interface size ({ppem:.4g} ppem now): x-height "
+        now = (f" Measured on {name} at the size GNOME uses it ({ppem:.4g} ppem now): x-height "
                f"{dx * 100:+.1f}%, lowercase against capitals {dr * 100:+.1f}% under "
                f"hintslight; 0% unhinted.")
     return (

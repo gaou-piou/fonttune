@@ -859,7 +859,7 @@ def test_nohint_question_config_and_snippet(tmp_path, monkeypatch, capsys):
     # variable fonts: no hint question, so nohint is asked on its own
     seen.clear()
     cfg = prompts.ask_config(DEFAULTS, {**fx, "hintable": False, "variable": True})
-    assert cfg["nohint"] is True and "Inter-Regular.ttf at the interface size (14.67 ppem now): " \
+    assert cfg["nohint"] is True and "Inter-Regular.ttf at the size GNOME uses it (14.67 ppem now): " \
         "x-height -0.2%, lowercase against capitals -3.2%" in seen["nohint"]
     seen.clear()
     cfg = prompts.ask_config({**DEFAULTS, "hint": "natural", "nohint": True}, fx, skip={"hint"})
@@ -924,6 +924,23 @@ def test_xheight_suggests_a_near_size_or_nohint(tmp_path):
     assert r.returncode == 0 and "12.5 pt is clean, 0.5 pt away" in r.stdout, r.stdout
     r = run("xheight", "--pt", "12.5", font, env=desktop(tmp_path, "Adwaita Sans 11"))
     out = " ".join(r.stdout.split())
-    assert "at the interface size (11 pt)" in out and "hintconf --style none" in out, out
+    assert "at the size it is used at (11 pt)" in out and "hintconf --style none" in out, out
     r = run("xheight", "--pt", "12.5", font, env=desktop(tmp_path, "Adwaita Sans 12.5"))
     assert "interface size" not in r.stdout                      # clean: nothing to suggest
+
+
+def test_xheight_marks_the_size_the_family_is_used_at(tmp_path):
+    font = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
+    if not Path(font).is_file():
+        pytest.skip("needs Adwaita Sans")
+    pytest.importorskip("freetype")
+    d = tmp_path / "bin"
+    d.mkdir()
+    (d / "gsettings").write_text("#!/bin/sh\ncase \"$3\" in font-name) echo \"'Inter 11'\";; "
+                                 "monospace-font-name) echo \"'Adwaita Sans 12.5'\";; "
+                                 "text-scaling-factor) echo 1.0;; esac\n")
+    (d / "gsettings").chmod(0o755)
+    r = run("xheight", "--pt", "11,12.5", font, env={**clean_env(), "PATH": str(d)})
+    assert "used at 12.5 pt = 16.6667 ppem: monospace font 'Adwaita Sans'" in r.stdout, r.stdout
+    assert "12.5  16.67" in r.stdout and "clean <- now" in r.stdout
+    assert "nohint" not in r.stdout                    # its own size is clean

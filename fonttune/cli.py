@@ -109,13 +109,18 @@ def trak_usage(fonts, sizes=None):
 
 
 def slight_xheight(fonts):
-    """(font name, ppem, x-height change, x/H change) of the Regular at the
-    interface size under hintslight, or None when it cannot be measured."""
+    """(font name, ppem, x-height change, x/H change) of the Regular at the size
+    GNOME uses its family at (system.usage_pt) under hintslight, or None when it
+    cannot be measured."""
     from . import report, xheight
     from .system import text_scale
     try:
+        from fontTools.ttLib import TTFont
         reg = report.regular([str(f) for f in fonts])
-        [(ppem, _, _, dx, dr)] = xheight.table(reg, [auto_ppem()], "slight", scale=text_scale())
+        with TTFont(reg, lazy=True, fontNumber=0) as t:
+            pt, _ = usage_pt(family(t))
+        [(ppem, _, _, dx, dr)] = xheight.table(reg, [round(pt * 96 / 72, 4)], "slight",
+                                               scale=text_scale())
         return Path(reg).name, ppem, dx, dr
     except Exception:  # noqa: BLE001 - only decoration for the nohint question
         return None
