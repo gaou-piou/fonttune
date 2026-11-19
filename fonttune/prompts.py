@@ -381,6 +381,10 @@ def ask_reports(cfg, facts, ask, skipped):
         if hs not in ("slight", ""):
             print(f"  note: the desktop uses hint style '{hs}': stem darkening acts only under "
                   "hintslight, so the curve would change nothing until you switch to it.")
+        if cfg.get("nohint"):
+            print("  note: nohint is on: with its snippet enabled these families are unhinted "
+                  "and the curve does not reach them; the report still measures the "
+                  "Regular as hintslight draws it, for every other font.")
         cur = str(cfg["darken"] or "")
         opts = [("", "no"),
                 ("2.5", "+2.5% ink at the interface size: a light lift that keeps the design's "

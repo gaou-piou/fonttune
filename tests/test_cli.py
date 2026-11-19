@@ -851,6 +851,8 @@ def test_nohint_question_config_and_snippet(tmp_path, monkeypatch, capsys):
     cfg = prompts.ask_config({**DEFAULTS, "hint": "natural", "nohint": True}, fx, skip={"hint"})
     assert "nohint" not in seen and cfg["nohint"] is False
     assert "[nohint] skipped: hint is 'natural'" in capsys.readouterr().out
+    prompts.ask_config({**DEFAULTS, "nohint": True}, {**fx, "freetype": True}, skip={"nohint"})
+    assert "nohint is on: with its snippet enabled" in capsys.readouterr().out
     state = {"firefox": {}, "chromium_flag_files": [], "gtk": {}, "rendering": "automatic"}
     text = advice.render({**DEFAULTS, "nohint": True, "darken": "2.5"}, hs="slight", state=state)
     assert "hintnone snippet" in text and "81-<package>-nohint.conf /etc/fonts/conf.d/" in text
