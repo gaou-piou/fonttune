@@ -728,3 +728,37 @@ def test_ask_opsz(tmp_path):
     t.save(static)
     r = ask("\n", str(static))
     assert r.returncode == 2 and "no opsz axis" in r.stderr
+
+
+def _with_trak(src, dst, values):
+    """Copy src to dst with an Apple trak table whose normal track is `values` {pt: units}."""
+    from fontTools.ttLib import TTFont, newTable
+    from fontTools.ttLib.tables._t_r_a_k import TrackData, TrackTableEntry
+    f = TTFont(src)
+    t = newTable("trak")
+    t.version, t.format = 1.0, 0
+    t.horizData = TrackData({0.0: TrackTableEntry({float(k): v for k, v in values.items()},
+                                                  nameIndex=256)})
+    t.vertData = TrackData()
+    f["trak"] = t
+    f.save(dst)
+    return str(dst)
+
+
+def test_trak_bake_shifts_every_instance_of_a_variable_font(tmp_path):
+    """HVAR deltas add to hmtx, so a constant added there reaches every instance."""
+    from fontTools.ttLib import TTFont
+    from fontTools.varLib.instancer import instantiateVariableFont
+    src = "/usr/share/fonts/Adwaita/AdwaitaSans-Regular.ttf"
+    if not Path(src).is_file() or "HVAR" not in TTFont(src, lazy=True):
+        pytest.skip("needs Adwaita Sans (variable, with HVAR)")
+    before = _with_trak(src, tmp_path / "before.ttf", {12: 0, 14: -22})
+    after = tmp_path / "after.ttf"
+    after.write_bytes(Path(before).read_bytes())
+    r = subprocess.run([sys.executable, str(BIN.parent.parent / "fonttune" / "steps" / "strip_trak.py"),
+                        "--bake", "14", str(after)], capture_output=True, text=True)
+    assert r.returncode == 0 and "baked -22 units/glyph" in r.stdout, r.stdout
+    assert "trak" not in TTFont(after)
+    for wght in (400, 700):
+        a, b = (instantiateVariableFont(TTFont(p), {"wght": wght})["hmtx"] for p in (before, after))
+        assert a["H"][0] - 22 == b["H"][0] and a["o"][0] - 22 == b["o"][0], wght

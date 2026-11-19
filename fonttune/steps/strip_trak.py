@@ -33,6 +33,7 @@ way: before the table is removed, its normal track (0.0) is interpolated at SIZE
 points and added to every advance width in hmtx. The result is one constant
 tracking at all sizes (the table itself varies with size), chosen for the size
 body text is read at; larger text is a little looser than Apple would set it.
+Variable fonts are baked the same way (see bake()).
 
 `add_stat.py` is the other option: it *adds* a STAT table so that HarfBuzz picks
 the table up. Both cannot be on at once; the PKGBUILD turns the STAT step off
@@ -79,9 +80,11 @@ def tracking_at(font, size):
 
 
 def bake(font, size):
-    """Add the tracking at `size` pt to every advance. Returns a log string."""
-    if "fvar" in font:
-        return "not baked (variable font: HVAR would override hmtx)"
+    """Add the tracking at `size` pt to every advance. Returns a log string.
+
+    Variable fonts too: HVAR (and gvar's phantom points) store deltas that are
+    added to the hmtx advance, so a constant added there moves every instance
+    by the same amount (measured on SF Pro: -22 at wght 1-1000, opsz 17-80)."""
     track = tracking_at(font, size)
     if track is None:
         return "nothing to bake"
