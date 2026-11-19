@@ -5,7 +5,8 @@ from .system import _gsettings, auto_ppem, hintstyle
 LABELS = [
     ("otf2ttf", "CFF -> TrueType"), ("weights", "usWeightClass fix"), ("trak", "trak table"),
     ("even_spacing", "even spacing"), ("pixel_grid", "pixel grid (ppem)"),
-    ("hint", "ttfautohint preset"), ("alts", "aalt alternates -> cvXX"),
+    ("hint", "ttfautohint preset"), ("nohint", "hintnone snippet"),
+    ("alts", "aalt alternates -> cvXX"),
     ("features", "baked features"),
     ("feature_suffix", "family suffix"), ("gasp", "gasp table"),
     ("check", "report: check"), ("xheight", "report: x-height sizes"),
@@ -111,6 +112,13 @@ def advice(cfg, hs=None, has_trak=True, state=None):
     elif hs in ("medium", "full"):
         add("system", f"hint style is '{hs}' but hint is off: FreeType will run its own "
                       "autohinter on TrueType; turn hint on to use ttfautohint instead")
+    if cfg.get("nohint"):
+        add("system", "nohint: the package ships conf.avail/81-<package>-nohint.conf, off until "
+                      "you enable it: sudo ln -s /usr/share/fontconfig/conf.avail/"
+                      "81-<package>-nohint.conf /etc/fonts/conf.d/ (remove the link to undo)")
+        if hs != "none":
+            add("system", f"nohint: only these families go unhinted; the rest of the desktop "
+                          f"keeps '{hs or 'its'}' hinting")
     if cfg["otf2ttf"] and hs == "none":
         add("system", "hint style 'none': TrueType conversion has no visible effect; "
                       "use slight (gsettings set org.gnome.desktop.interface font-hinting slight)")
@@ -225,7 +233,10 @@ def advice(cfg, hs=None, has_trak=True, state=None):
         add("system", "darken report: its FREETYPE_PROPERTIES line goes in "
                       "~/.config/environment.d/*.conf (log in again)"
                       + ("" if hs in ("slight", "") else
-                         f"; it acts only under hintslight, the desktop uses '{hs}'"))
+                         f"; it acts only under hintslight, the desktop uses '{hs}'")
+                      + ("; with nohint these families are unhinted, so the curve does not "
+                         "reach them (it still darkens every other font)" if cfg.get("nohint")
+                         else ""))
     add("system", "after installing: fc-cache -f, then restart the apps (and log out for GTK)")
     return out
 

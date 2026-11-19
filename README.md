@@ -22,7 +22,19 @@ the table (`fonttune/steps/expose_alts.py --list FONT...` shows it without chang
 anything). The lookups run last, so case/liga forms get their own alternate
 (zero.cap -> zero.alt.cap) and tabular or fraction figures are left alone.
 
-`hint` runs ttfautohint (presets balanced, sharp, natural, light; `--hint-mode/-min/-max/-limit/-xheight/-xsnap` override) and adds otf2ttf when it gets OTFs. FreeType runs the bytecode only at hintmedium/hintfull, so under hintslight it changes nothing; `configure` reads the desktop hint style and preselects `no` there. `fonttune hintconf -o 80-x.conf FONT...` writes the fontconfig snippet that enables bytecode hinting for those families (Chromium/Electron excluded).
+`hint` runs ttfautohint (presets balanced, sharp, natural, light; `--hint-mode/-min/-max/-limit/-xheight/-xsnap` override) and adds otf2ttf when it gets OTFs. FreeType runs the bytecode only at hintmedium/hintfull, so under hintslight it changes nothing; `configure` reads the desktop hint style and preselects `no` there. `fonttune hintconf -o 80-x.conf FONT...` writes the fontconfig snippet that enables bytecode hinting for those families (Chromium/Electron excluded); `--style none` writes the `nohint` one instead.
+
+`nohint` (`--nohint`, `FONTTUNE_NOHINT=true`) leaves the fonts alone and has the package
+ship `conf.avail/81-<package>-nohint.conf`, written by `fonttune hintconf --style none
+FONT...`: `hintstyle=hintnone` for every built family, variable ones included, off until
+linked into `/etc/fonts/conf.d/`. The outlines are then drawn as designed and only
+anti-aliased, as on macOS. Measured with Pango/cairo at 12-18 px (mean gray difference
+from the unhinted design / extra ink), hintslight against hintnone: SF Pro 0.133 / +3.8%
+against 0.040 / 0%, Inter 0.102 against 0.039, Iosevka 0.135 against 0.035. The rule wins
+over the hint style a program asks cairo for (GTK4's built-in hintslight: identical
+bitmaps to hintnone once it is on); Chromium and Firefox read it too. It excludes `hint`,
+and stem darkening no longer reaches those families. The question shows the Regular's
+x-height change at the interface size under hintslight.
 
 `fonttune configure --save-to FILE FONT...` asks the questions, prints a summary of the choices with what to set up in the system and browsers, waits for Enter (n aborts), and writes the settings;
 `fonttune run --config FILE --in-place [--only|--skip steps] FONT...` applies them.

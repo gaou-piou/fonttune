@@ -43,7 +43,7 @@ STEP_KEYS = [k for k, _ in STEPS]
 
 DEFAULTS = {
     "otf2ttf": False, "weights": False, "trak": "", "even_spacing": "",
-    "pixel_grid": "", "hint": "", "hint_mode": "auto", "hint_min": "auto",
+    "pixel_grid": "", "hint": "", "nohint": False, "hint_mode": "auto", "hint_min": "auto",
     "hint_max": "auto", "hint_limit": "auto", "hint_xheight": "auto", "hint_xsnap": "auto",
     "alts": False, "features": "", "feature_target": "calt",
     "feature_family": "", "feature_suffix": "", "gasp": "keep", "ppem": 16.0,
@@ -51,9 +51,9 @@ DEFAULTS = {
     # reports printed after the steps (fonttune/report.py); they never change a font
     "check": "", "xheight": False, "darken": "",
 }
-BOOLS = {"otf2ttf", "weights", "alts", "xheight"}
-PROMPTED = ("otf2ttf", "weights", "trak", "even_spacing", "pixel_grid", "hint", "alts", "features",
-            "feature_suffix", "gasp", "check", "xheight", "darken")
+BOOLS = {"otf2ttf", "weights", "alts", "xheight", "nohint"}
+PROMPTED = ("otf2ttf", "weights", "trak", "even_spacing", "pixel_grid", "hint", "nohint", "alts",
+            "features", "feature_suffix", "gasp", "check", "xheight", "darken")
 
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "fonttune" / "config.toml"
 DEV = CONFIG.with_name("dev")  # the local tree the PKGBUILDs use with FONTTUNE_DEV=true
@@ -108,6 +108,19 @@ def trak_usage(fonts, sizes=None):
     return out
 
 
+def slight_xheight(fonts):
+    """(font name, ppem, x-height change, x/H change) of the Regular at the
+    interface size under hintslight, or None when it cannot be measured."""
+    from . import report, xheight
+    from .system import text_scale
+    try:
+        reg = report.regular([str(f) for f in fonts])
+        [(ppem, _, _, dx, dr)] = xheight.table(reg, [auto_ppem()], "slight", scale=text_scale())
+        return Path(reg).name, ppem, dx, dr
+    except Exception:  # noqa: BLE001 - only decoration for the nohint question
+        return None
+
+
 def facts(fonts):
     """What the inputs allow, so prompts only ask relevant things."""
     from fontTools.ttLib import TTFont
@@ -140,9 +153,10 @@ def facts(fonts):
         ft = True
     except ImportError:
         ft = False
-    return {"trak": trak, "trak_usage": trak_usage(fonts) if trak else [], "gridable": gridable, "hintable": hintable, "variable": variable,
-            "cff": cff, "weights": weights, "alts": alts, "freetype": ft,
-            "fontbakery": bool(shutil.which("fontbakery"))}
+    return {"trak": trak, "trak_usage": trak_usage(fonts) if trak else [], "gridable": gridable,
+            "hintable": hintable, "variable": variable, "cff": cff, "weights": weights, "alts": alts, "freetype": ft,
+            "fontbakery": bool(shutil.which("fontbakery")),
+            "slight_xheight": slight_xheight(fonts) if ft else None}
 
 
 def die(msg):
@@ -163,6 +177,9 @@ def validate(cfg):
     if cfg["pixel_grid"] and cfg["even_spacing"]:
         die("pixel_grid and even_spacing are mutually exclusive: pixel_grid "
             "zeroes most of the small kerns even_spacing adds")
+    if cfg["nohint"] and cfg["hint"]:
+        die("nohint and hint exclude each other: under hintnone FreeType never runs the "
+            "ttfautohint bytecode")
     if cfg["hint"] not in ("", "balanced", "sharp", "natural", "light"):
         die(f"unknown hint preset {cfg['hint']!r} (balanced, sharp, natural, light)")
     if str(cfg["hint_mode"]) != "auto" and not re.fullmatch(r"[nqs]{3}", str(cfg["hint_mode"])):
@@ -504,8 +521,12 @@ def main(argv=None):
                        "the PKGBUILDs build with under FONTTUNE_DEV=true")
     d.add_argument("action", nargs="?", choices=("set", "unset", "status", "on", "off"), default="status")
     d.add_argument("path", nargs="?", help="set: the fonttune tree (default: this one)")
-    h = sub.add_parser("hintconf", help="write the fontconfig snippet that enables bytecode hinting")
+    h = sub.add_parser("hintconf", help="write the fontconfig snippet that enables bytecode "
+                       "hinting (--style medium) or turns hinting off (--style none)")
     h.add_argument("fonts", nargs="+")
+    h.add_argument("--style", choices=("medium", "none"), default="medium",
+                   help="medium: the fonts' ttfautohint bytecode (default); none: no hinting "
+                        "for every family given (the nohint setting)")
     h.add_argument("-o", "--out", default="-", help="file to write (default: stdout)")
     h.add_argument("--name", default="fonttune")
     r = sub.add_parser("run", help="apply the pipeline")
@@ -535,6 +556,9 @@ def main(argv=None):
         p.add_argument("--feature-suffix", dest="feature_suffix",
                        help="append to every family name (' Alt'), also where no feature applies")
         p.add_argument("--hint", help="ttfautohint preset: balanced, sharp, natural or light")
+        p.add_argument("--nohint", action="store_true", default=None,
+                       help="draw these families unhinted (hintnone) through a fontconfig snippet "
+                            "the package ships: `fonttune hintconf --style none`")
         for k in ("mode", "min", "max", "limit", "xheight", "xsnap"):
             p.add_argument(f"--hint-{k}", dest=f"hint_{k}")
         p.add_argument("--gasp")
@@ -567,7 +591,7 @@ def main(argv=None):
         return dev(a.action, a.path)
     if a.cmd == "hintconf":
         from . import hintconf
-        hintconf.main(a.fonts, a.out, a.name)
+        hintconf.main(a.fonts, a.out, a.name, a.style)
         return 0
     if a.cmd == "run":
         if not a.in_place and not a.out:

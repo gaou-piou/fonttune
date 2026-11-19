@@ -23,8 +23,10 @@ def regular(fonts):
     return min(fonts, key=key)
 
 
-def _call(title, module, argv):
+def _call(title, module, argv, note=""):
     print(f"\n══ fonttune {title} ══", flush=True)
+    if note:
+        print(f"note: {note}\n", flush=True)
     try:
         from importlib import import_module
         import_module(f"{__package__}.{module}").main(argv)
@@ -33,6 +35,13 @@ def _call(title, module, argv):
     except Exception as e:  # noqa: BLE001 - a report must not fail the build
         print(f"  {module} skipped: {type(e).__name__}: {e}")
     sys.stdout.flush()
+
+
+NOHINT_XHEIGHT = ("nohint is on: with its snippet enabled these families are drawn unhinted "
+                  "and keep the exact x-height at every size; the table is what hintslight "
+                  "does with the snippet off.")
+NOHINT_DARKEN = ("nohint is on: with its snippet enabled these families are unhinted and the "
+                 "curve does not reach them; it still applies to every other font.")
 
 
 def wanted(cfg):
@@ -52,6 +61,8 @@ def run(cfg, fonts, hs):
     if cfg.get("xheight"):
         # the bytecode runs only when there is one and the desktop hints at medium/full
         mode = "full" if cfg.get("hint") and hs in ("medium", "full") else "slight"
-        _call(f"xheight ({mode})", "xheight", [reg, "--mode", mode])
+        _call(f"xheight ({mode})", "xheight", [reg, "--mode", mode], NOHINT_XHEIGHT
+              if cfg.get("nohint") else "")
     if cfg.get("darken"):
-        _call("darken", "darken", [reg, "--ink", str(cfg["darken"])])
+        _call("darken", "darken", [reg, "--ink", str(cfg["darken"])], NOHINT_DARKEN
+              if cfg.get("nohint") else "")

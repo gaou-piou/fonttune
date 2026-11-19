@@ -95,6 +95,33 @@ def _table_text(usage):
     return ""
 
 
+def _nohint_text(measured):
+    """The nohint question, with the Regular's x-height change measured now."""
+    now = ""
+    if measured:
+        name, ppem, dx, dr = measured
+        now = (f" Measured on {name} at the interface size ({ppem:.4g} ppem now): x-height "
+               f"{dx * 100:+.1f}%, lowercase against capitals {dr * 100:+.1f}% under "
+               f"hintslight; 0% unhinted.")
+    return (
+        "Draw these families without hinting (hintnone), the way macOS draws them?"
+        "\n\nUnder hintslight (GNOME's default, GTK4's built-in choice) FreeType's autofitter "
+        "moves every outline up or down to whole pixels: the x-height is rounded, so the "
+        "lowercase grows or shrinks against the capitals by a different amount at each "
+        "size, and stems come out darker." + now +
+        " Unhinted, the outlines are drawn exactly as designed and only anti-aliased: on SF "
+        "Pro at 12-18 px the mean difference from the design fell from 0.133 to 0.040 "
+        "(gray levels) and the extra ink from 3.8% to 0%; Inter and Iosevka measured "
+        "alike. The cost is slightly softer horizontal edges (edge contrast 0.582 -> "
+        "0.574 on SF Pro), most visible on low-DPI screens."
+        "\n\nThe fonts are not changed. The package ships "
+        "conf.avail/81-<package>-nohint.conf (`fonttune hintconf --style none`), which sets "
+        "hintnone for these families only, off until you link it into /etc/fonts/conf.d/. "
+        "It wins over GTK4's built-in hintslight; Chromium and Firefox read it too. Stem "
+        "darkening (darken) no longer reaches these families, and hint (ttfautohint) is "
+        "pointless with it.")
+
+
 def ask_config(cfg, facts, skip=()):
     """facts: what the input fonts allow ({'trak', 'gridable', 'hintable', 'variable'}: bool).
     skip: keys already decided by flags or environment; they are not asked."""
@@ -231,6 +258,14 @@ def ask_config(cfg, facts, skip=()):
                         "only the heights are aligned. Least distortion, softer"),
             ("light", "like natural but only from 12 px up; smaller text is left unhinted. "
                       "For HiDPI screens")], cur)
+    if ask("nohint"):
+        if cfg["hint"]:
+            skipped("nohint", f"hint is '{cfg['hint']}': its bytecode needs hinting on "
+                              "(answer no hints to get this question)")
+            cfg["nohint"] = False
+        else:
+            cfg["nohint"] = yesno("nohint", _nohint_text(facts.get("slight_xheight")),
+                                  bool(cfg["nohint"]))
     if ask("alts"):
         alts = facts.get("alts", [])
         if alts:
